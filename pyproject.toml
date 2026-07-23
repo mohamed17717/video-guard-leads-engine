@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "video-guard-leads-engine"
+version = "0.1.0"
+description = "Polite, resumable public-contact crawler for lead generation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "VideoGuard" }]
+dependencies = [
+  "beautifulsoup4>=4.12,<5",
+  "httpx>=0.27,<1",
+  "phonenumbers>=8.13,<10",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+leads-engine = "leads_engine.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/leads_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
