@@ -45,8 +45,9 @@ async def _run(args: argparse.Namespace) -> int:
             if "crawl_error:" in row.get("notes", "")
         }
         targets = [target for target in targets if target.host in failed_names]
+        retried_names = {target.host for target in targets}
         retained_rows = [
-            row for row in old_rows if "crawl_error:" not in row.get("notes", "")
+            row for row in old_rows if row.get("name", "") not in retried_names
         ]
         rewrite_output = True
     elif not args.refresh:
