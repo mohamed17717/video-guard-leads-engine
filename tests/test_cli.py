@@ -3,7 +3,10 @@ import csv
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from leads_engine import cli
+from leads_engine.input import InputFormatError
 from leads_engine.models import CSV_FIELDS, Lead
 
 
@@ -26,15 +29,12 @@ def _row(name: str, notes: str = "") -> dict[str, str]:
 def test_retry_errors_replaces_selected_failures_only(
     tmp_path: Path, monkeypatch
 ) -> None:
-    markdown = tmp_path / "leads.md"
-    markdown.write_text(
+    input_file = tmp_path / "leads.txt"
+    input_file.write_text(
         """\
-## Platform
-<https://success.example/>
-<https://retry.example/>
-<https://new.example/>
-## Related
-<https://related.example/>
+https://success.example/
+https://retry.example/
+https://new.example/
 """,
         encoding="utf-8",
     )
@@ -52,7 +52,7 @@ def test_retry_errors_replaces_selected_failures_only(
 
     monkeypatch.setattr(cli, "crawl_targets", fake_crawl)
     args = cli.build_parser().parse_args(
-        [str(markdown), "--output", str(output), "--retry-errors"]
+        [str(input_file), "--output", str(output), "--retry-errors"]
     )
 
     assert asyncio.run(cli._run(args)) == 0
@@ -62,3 +62,20 @@ def test_retry_errors_replaces_selected_failures_only(
     assert set(rows) == {"success.example", "retry.example", "related.example"}
     assert rows["retry.example"]["notes"] == ""
     assert "crawl_error:" in rows["related.example"]["notes"]
+
+
+def test_invalid_input_stops_before_output_is_created(tmp_path: Path) -> None:
+    input_file = tmp_path / "invalid.txt"
+    input_file.write_text(
+        "https://valid.example/\nthis is not a URL\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "must-not-exist.csv"
+    args = cli.build_parser().parse_args(
+        [str(input_file), "--output", str(output)]
+    )
+
+    with pytest.raises(InputFormatError, match="line 2"):
+        asyncio.run(cli._run(args))
+
+    assert not output.exists()

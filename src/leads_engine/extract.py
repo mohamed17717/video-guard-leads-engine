@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlsplit
 import phonenumbers
 from bs4 import BeautifulSoup
 
-from .markdown import host_for_url
+from .input import host_for_url
 from .models import Lead
 
 

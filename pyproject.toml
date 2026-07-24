@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "video-guard-leads-engine"
-version = "0.1.0"
+version = "0.2.0"
 description = "Polite, resumable public-contact crawler for lead generation"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,4 +27,3 @@ packages = ["src/leads_engine"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-

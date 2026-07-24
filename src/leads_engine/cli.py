@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .crawler import CrawlConfig, crawl_targets
-from .markdown import extract_targets
+from .input import InputFormatError, extract_targets
 from .models import CSV_FIELDS
 
 
@@ -19,11 +19,7 @@ def _existing_rows(path: Path) -> list[dict[str, str]]:
 
 
 async def _run(args: argparse.Namespace) -> int:
-    targets = extract_targets(
-        args.input,
-        sections=set(args.section or {"Platform"}),
-        all_sections=args.all_sections,
-    )
+    targets = extract_targets(args.input)
     if args.limit:
         targets = targets[: args.limit]
 
@@ -100,14 +96,12 @@ def _positive_int(value: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="leads-engine",
-        description="Crawl public contact details from URLs stored in Markdown.",
+        description="Crawl public contact details from a one-URL-per-line text file.",
     )
     parser.add_argument(
         "input",
-        nargs="?",
         type=Path,
-        default=Path("../leads.md"),
-        help="Markdown file containing lead URLs (default: ../leads.md)",
+        help="UTF-8 text file containing exactly one HTTP(S) URL per non-empty line",
     )
     parser.add_argument(
         "-o",
@@ -115,16 +109,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("leads.csv"),
         help="destination CSV (default: leads.csv)",
-    )
-    parser.add_argument(
-        "--section",
-        action="append",
-        help="Markdown section to include; repeatable (default: Platform)",
-    )
-    parser.add_argument(
-        "--all-sections",
-        action="store_true",
-        help="include every Markdown section",
     )
     parser.add_argument("--source", default="google dorks")
     parser.add_argument("--default-country", default="EG", help="ISO-2 fallback")
@@ -162,9 +146,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
     try:
         raise SystemExit(asyncio.run(_run(args)))
+    except InputFormatError as error:
+        parser.error(str(error))
     except KeyboardInterrupt:
         print("\nStopped; completed rows are already saved.", file=sys.stderr)
         raise SystemExit(130) from None

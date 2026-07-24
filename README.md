@@ -1,7 +1,7 @@
 # VideoGuard Leads Engine
 
-A polite, resumable crawler that reads platform URLs from Markdown and extracts
-public contact data into:
+A polite, resumable crawler that reads platform URLs from a UTF-8 text file and
+extracts public contact data into:
 
 ```csv
 name,company_name,phone,whatsapp,email,website,social_url,country,source,notes,date
@@ -9,7 +9,11 @@ name,company_name,phone,whatsapp,email,website,social_url,country,source,notes,d
 
 The crawler:
 
-- keeps the first URL from `leads.md` exactly as written in `website`;
+- requires exactly one absolute `http://` or `https://` URL per non-empty line;
+- validates the whole input file before making any network request or opening
+  the output CSV;
+- ignores blank lines and keeps the first URL for each hostname exactly as
+  written in `website`;
 - deduplicates websites by hostname and uses that hostname for both `name` and
   `company_name`;
 - prefers a WhatsApp number, falls back to another public phone number, and
@@ -36,32 +40,32 @@ python -m pip install -e '.[dev]'
 
 ## Usage
 
-Preview the unique domains in the default `Platform` section without crawling:
+Create a `.txt` input file with one URL per line:
 
-```bash
-leads-engine ../leads.md --dry-run
+```text
+https://example.com/
+https://academy.example.org/courses
+
+https://another.example.net/contact
 ```
 
-Crawl the default section:
+Blank lines are allowed. Markdown bullets, headings, comments, multiple URLs on
+one line, non-HTTP URLs, and malformed URLs cause the command to stop before
+crawling.
 
 ```bash
-leads-engine ../leads.md --output leads.csv
+leads-engine leads1.txt --dry-run
 ```
 
-Include `Related` and `Big Players` as well:
+Start crawling:
 
 ```bash
-leads-engine ../leads.md \
-  --section Platform \
-  --section Related \
-  --section "Big Players" \
-  --output leads.csv
+leads-engine leads1.txt --output leads.csv
 ```
 
 Useful options:
 
 ```text
---all-sections        Crawl every section (direct social-media targets are skipped)
 --retry-errors        Replace failed rows by retrying only crawl_error domains
 --refresh             Replace the CSV and crawl all selected domains again
 --default-country EG  Country fallback and local phone parsing region
@@ -74,7 +78,7 @@ Existing successful domains are skipped by default. Use a small trial before
 running the whole list:
 
 ```bash
-leads-engine ../leads.md --limit 10 --output trial.csv
+leads-engine leads1.txt --limit 10 --output trial.csv
 ```
 
 ## Tests

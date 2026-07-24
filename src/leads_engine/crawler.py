@@ -10,7 +10,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .extract import extract_lead
-from .markdown import CrawlTarget, host_for_url
+from .input import CrawlTarget, host_for_url
 from .models import Lead
 
 
@@ -188,4 +188,3 @@ async def crawl_targets(
         ]
         for completed in asyncio.as_completed(tasks):
             yield await completed
-
