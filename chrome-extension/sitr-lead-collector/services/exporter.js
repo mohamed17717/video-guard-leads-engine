@@ -157,7 +157,7 @@ export function formatLeadCollectionAsText(
   return [header, ...leadBlocks].join("\n\n") + "\n";
 }
 
-export function createTxtFilename(value = new Date()) {
+function createExportFilename(extension, value = new Date()) {
   const date = toValidDate(value);
   const datePart = [
     date.getUTCFullYear(),
@@ -169,18 +169,42 @@ export function createTxtFilename(value = new Date()) {
     String(date.getUTCMinutes()).padStart(2, "0")
   ].join("");
 
-  return `sitr-leads-${datePart}-${timePart}.txt`;
+  return `sitr-leads-${datePart}-${timePart}.${extension}`;
 }
 
-export async function downloadLeadCollectionAsTxt(
+export function createTxtFilename(value = new Date()) {
+  return createExportFilename("txt", value);
+}
+
+export function createJsonFilename(value = new Date()) {
+  return createExportFilename("json", value);
+}
+
+export function formatLeadCollectionAsJson(
   leads,
   { exportedAt = new Date() } = {}
 ) {
-  const exportDate = toValidDate(exportedAt);
-  const text = formatLeadCollectionAsText(leads, { exportedAt: exportDate });
-  const filename = createTxtFilename(exportDate);
-  const blob = new Blob(["\uFEFF", text], {
-    type: "text/plain;charset=utf-8"
+  const leadList = Array.isArray(leads) ? leads : [];
+
+  return (
+    JSON.stringify(
+      {
+        exportedAt: formatIsoToSeconds(exportedAt),
+        totalLeads: leadList.length,
+        leads: leadList
+      },
+      null,
+      2
+    ) + "\n"
+  );
+}
+
+async function downloadUtf8File(
+  content,
+  { filename, mimeType, includeBom = false }
+) {
+  const blob = new Blob(includeBom ? ["\uFEFF", content] : [content], {
+    type: `${mimeType};charset=utf-8`
   });
   const objectUrl = URL.createObjectURL(blob);
 
@@ -193,11 +217,42 @@ export async function downloadLeadCollectionAsTxt(
     });
 
     if (typeof downloadId !== "number") {
-      throw new Error("Chrome did not start the TXT download.");
+      throw new Error(`Chrome did not start the ${filename} download.`);
     }
 
     return { downloadId, filename };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+export async function downloadLeadCollectionAsTxt(
+  leads,
+  { exportedAt = new Date() } = {}
+) {
+  const exportDate = toValidDate(exportedAt);
+  const text = formatLeadCollectionAsText(leads, { exportedAt: exportDate });
+  const filename = createTxtFilename(exportDate);
+
+  return downloadUtf8File(text, {
+    filename,
+    mimeType: "text/plain",
+    includeBom: true
+  });
+}
+
+export async function downloadLeadCollectionAsJson(
+  leads,
+  { exportedAt = new Date() } = {}
+) {
+  const exportDate = toValidDate(exportedAt);
+  const json = formatLeadCollectionAsJson(leads, {
+    exportedAt: exportDate
+  });
+  const filename = createJsonFilename(exportDate);
+
+  return downloadUtf8File(json, {
+    filename,
+    mimeType: "application/json"
+  });
 }

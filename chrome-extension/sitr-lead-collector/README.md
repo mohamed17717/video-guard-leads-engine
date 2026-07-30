@@ -13,8 +13,8 @@ normalization utilities, a review-first capture preview, and persistent lead
 storage with duplicate replace/merge handling. The collected leads page supports
 batched card rendering, search, copy, source opening, detail expansion, and
 deletion. The popup can export the complete collection as a UTF-8 TXT file and
-offers to keep or clear stored leads only after the download starts. JSON export
-remains a placeholder for a later task.
+as pretty-printed UTF-8 JSON. Both formats offer to keep or clear stored leads
+only after the download starts.
 
 ## Load the extension in Chrome
 

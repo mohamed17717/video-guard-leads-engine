@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createJsonFilename,
   createTxtFilename,
+  downloadLeadCollectionAsJson,
   downloadLeadCollectionAsTxt,
   formatLeadAsText,
+  formatLeadCollectionAsJson,
   formatLeadCollectionAsText
 } from "../services/exporter.js";
 
@@ -111,6 +114,43 @@ test("creates the requested UTC TXT filename", () => {
   );
 });
 
+test("pretty-prints JSON while preserving raw values and Arabic content", () => {
+  const rawPhone = {
+    raw: "010 1234 5678",
+    normalized: "+201012345678"
+  };
+  const json = formatLeadCollectionAsJson(
+    [
+      {
+        id: "lead-1",
+        pageTitle: "أكاديمية أحمد",
+        sourceUrl: "https://example.com",
+        hostname: "example.com",
+        capturedAt: "2026-07-30T03:20:00Z",
+        phones: [rawPhone],
+        whatsapp: [],
+        socialLinks: [],
+        externalLinks: []
+      }
+    ],
+    { exportedAt: "2026-07-30T04:00:00.000Z" }
+  );
+  const parsed = JSON.parse(json);
+
+  assert.match(json, /\n  "exportedAt":/);
+  assert.match(json, /أكاديمية أحمد/);
+  assert.equal(parsed.exportedAt, "2026-07-30T04:00:00Z");
+  assert.equal(parsed.totalLeads, 1);
+  assert.deepEqual(parsed.leads[0].phones[0], rawPhone);
+});
+
+test("creates the requested UTC JSON filename", () => {
+  assert.equal(
+    createJsonFilename("2026-07-30T04:00:00.000Z"),
+    "sitr-leads-2026-07-30-0400.json"
+  );
+});
+
 test("starts a Chrome download with a UTF-8 text blob", async () => {
   const originalCreateObjectUrl = URL.createObjectURL;
   const originalRevokeObjectUrl = URL.revokeObjectURL;
@@ -148,6 +188,48 @@ test("starts a Chrome download with a UTF-8 text blob", async () => {
     assert.equal(exportedBlob.type, "text/plain;charset=utf-8");
     assert.match(await exportedBlob.text(), /SITR LEAD COLLECTION/);
     assert.equal(revokedUrl, "blob:test-export");
+  } finally {
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
+});
+
+test("starts a Chrome download with a UTF-8 JSON blob", async () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  let exportedBlob = null;
+  let downloadOptions = null;
+
+  URL.createObjectURL = (blob) => {
+    exportedBlob = blob;
+    return "blob:json-export";
+  };
+  URL.revokeObjectURL = () => {};
+  globalThis.chrome = {
+    downloads: {
+      async download(options) {
+        downloadOptions = options;
+        return 84;
+      }
+    }
+  };
+
+  try {
+    const result = await downloadLeadCollectionAsJson(
+      [{ pageTitle: "أكاديمية أحمد" }],
+      { exportedAt: "2026-07-30T04:00:00.000Z" }
+    );
+
+    assert.deepEqual(result, {
+      downloadId: 84,
+      filename: "sitr-leads-2026-07-30-0400.json"
+    });
+    assert.equal(downloadOptions.filename, result.filename);
+    assert.equal(exportedBlob.type, "application/json;charset=utf-8");
+    assert.equal(
+      JSON.parse(await exportedBlob.text()).leads[0].pageTitle,
+      "أكاديمية أحمد"
+    );
   } finally {
     URL.createObjectURL = originalCreateObjectUrl;
     URL.revokeObjectURL = originalRevokeObjectUrl;

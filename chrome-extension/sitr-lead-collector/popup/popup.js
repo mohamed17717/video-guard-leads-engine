@@ -5,7 +5,10 @@ import {
   getLeadCount,
   STORAGE_KEY
 } from "../services/storage.js";
-import { downloadLeadCollectionAsTxt } from "../services/exporter.js";
+import {
+  downloadLeadCollectionAsJson,
+  downloadLeadCollectionAsTxt
+} from "../services/exporter.js";
 import { normalizeExtractedData } from "../services/normalizer.js";
 
 const statusMessage = document.querySelector("#status-message");
@@ -20,30 +23,23 @@ const mergeLeadButton = document.querySelector("#merge-lead");
 const cancelDuplicateButton = document.querySelector("#cancel-duplicate");
 const clearAllButton = document.querySelector("#clear-all");
 const exportTxtButton = document.querySelector("#export-txt");
-const exportDialog = document.querySelector("#txt-export-dialog");
+const exportJsonButton = document.querySelector("#export-json");
+const exportDialog = document.querySelector("#export-complete-dialog");
+const exportDialogTitle = document.querySelector("#export-dialog-title");
 const clearAfterExportButton = document.querySelector(
-  "#clear-after-txt-export"
+  "#clear-after-export"
 );
 const keepAfterExportButton = document.querySelector(
-  "#keep-after-txt-export"
+  "#keep-after-export"
 );
 
 let pendingLead = null;
 let storageOperationPending = false;
-
-const placeholderActions = {
-  "#export-json": "JSON export will be added in a later task."
-};
+let completedExportLabel = "File";
 
 function setStatus(message, state = "neutral") {
   statusMessage.textContent = message;
   statusMessage.dataset.state = state;
-}
-
-for (const [selector, message] of Object.entries(placeholderActions)) {
-  document.querySelector(selector).addEventListener("click", () => {
-    setStatus(message);
-  });
 }
 
 function isAccessiblePageUrl(value) {
@@ -151,6 +147,7 @@ function setStorageLoading(isLoading) {
   cancelDuplicateButton.disabled = isLoading;
   clearAllButton.disabled = isLoading;
   exportTxtButton.disabled = isLoading;
+  exportJsonButton.disabled = isLoading;
   updateSaveButton();
 }
 
@@ -366,9 +363,9 @@ clearAllButton.addEventListener("click", async () => {
   }
 });
 
-exportTxtButton.addEventListener("click", async () => {
+async function exportStoredLeads(label, downloadExport) {
   setStorageLoading(true);
-  setStatus("Preparing TXT export…");
+  setStatus(`Preparing ${label} export…`);
 
   try {
     const leads = await getAllLeads();
@@ -378,20 +375,33 @@ exportTxtButton.addEventListener("click", async () => {
       return;
     }
 
-    await downloadLeadCollectionAsTxt(leads);
-    setStatus("TXT download started successfully.", "success");
+    await downloadExport(leads);
+    completedExportLabel = label;
+    exportDialogTitle.textContent = `${label} export started`;
+    setStatus(`${label} download started successfully.`, "success");
     exportDialog.showModal();
   } catch (error) {
-    console.error("Unable to export leads as TXT.", error);
-    setStatus("The TXT file could not be downloaded.", "error");
+    console.error(`Unable to export leads as ${label}.`, error);
+    setStatus(`The ${label} file could not be downloaded.`, "error");
   } finally {
     setStorageLoading(false);
   }
+}
+
+exportTxtButton.addEventListener("click", () => {
+  exportStoredLeads("TXT", downloadLeadCollectionAsTxt);
+});
+
+exportJsonButton.addEventListener("click", () => {
+  exportStoredLeads("JSON", downloadLeadCollectionAsJson);
 });
 
 keepAfterExportButton.addEventListener("click", () => {
   exportDialog.close();
-  setStatus("TXT downloaded. Stored leads were kept.", "success");
+  setStatus(
+    `${completedExportLabel} downloaded. Stored leads were kept.`,
+    "success"
+  );
 });
 
 clearAfterExportButton.addEventListener("click", async () => {
@@ -403,12 +413,15 @@ clearAfterExportButton.addEventListener("click", async () => {
     await refreshLeadCount();
     hideDuplicateWarning();
     exportDialog.close();
-    setStatus("TXT downloaded and stored leads were cleared.", "success");
+    setStatus(
+      `${completedExportLabel} downloaded and stored leads were cleared.`,
+      "success"
+    );
   } catch (error) {
     console.error("Unable to clear leads after export.", error);
     exportDialog.close();
     setStatus(
-      "TXT downloaded, but the stored leads could not be cleared.",
+      `${completedExportLabel} downloaded, but the stored leads could not be cleared.`,
       "error"
     );
   } finally {
@@ -418,7 +431,10 @@ clearAfterExportButton.addEventListener("click", async () => {
 });
 
 exportDialog.addEventListener("cancel", () => {
-  setStatus("TXT downloaded. Stored leads were kept.", "success");
+  setStatus(
+    `${completedExportLabel} downloaded. Stored leads were kept.`,
+    "success"
+  );
 });
 
 if (chrome.storage?.onChanged) {
