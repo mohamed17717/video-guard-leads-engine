@@ -6,6 +6,7 @@ import {
   STORAGE_KEY
 } from "../services/storage.js";
 import {
+  downloadLeadCollectionAsCsv,
   downloadLeadCollectionAsJson,
   downloadLeadCollectionAsTxt
 } from "../services/exporter.js";
@@ -28,6 +29,7 @@ const cancelDuplicateButton = document.querySelector("#cancel-duplicate");
 const clearAllButton = document.querySelector("#clear-all");
 const exportTxtButton = document.querySelector("#export-txt");
 const exportJsonButton = document.querySelector("#export-json");
+const exportCsvButton = document.querySelector("#export-csv");
 const exportDialog = document.querySelector("#export-complete-dialog");
 const exportDialogTitle = document.querySelector("#export-dialog-title");
 const clearAfterExportButton = document.querySelector(
@@ -175,6 +177,7 @@ function setStorageLoading(isLoading) {
   clearAllButton.disabled = isLoading;
   exportTxtButton.disabled = isLoading;
   exportJsonButton.disabled = isLoading;
+  exportCsvButton.disabled = isLoading;
   manualPhoneInput.disabled = isLoading;
   manualWhatsappInput.disabled = isLoading;
   addManualPhoneButton.disabled = isLoading;
@@ -488,6 +491,10 @@ exportTxtButton.addEventListener("click", () => {
 
 exportJsonButton.addEventListener("click", () => {
   exportStoredLeads("JSON", downloadLeadCollectionAsJson);
+});
+
+exportCsvButton.addEventListener("click", () => {
+  exportStoredLeads("CSV", downloadLeadCollectionAsCsv);
 });
 
 keepAfterExportButton.addEventListener("click", () => {

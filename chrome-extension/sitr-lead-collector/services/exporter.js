@@ -66,6 +66,97 @@ const PLATFORM_LABELS = {
   youtube: "YouTube"
 };
 
+export const CSV_HEADERS = [
+  "name",
+  "company_name",
+  "phone",
+  "whatsapp",
+  "email",
+  "website",
+  "social_url",
+  "country",
+  "source",
+  "notes"
+];
+
+const COUNTRY_CALLING_CODES = [
+  ["+971", "AE"],
+  ["+966", "SA"],
+  ["+965", "KW"],
+  ["+974", "QA"],
+  ["+973", "BH"],
+  ["+968", "OM"],
+  ["+967", "YE"],
+  ["+964", "IQ"],
+  ["+963", "SY"],
+  ["+962", "JO"],
+  ["+961", "LB"],
+  ["+970", "PS"],
+  ["+972", "IL"],
+  ["+212", "MA"],
+  ["+213", "DZ"],
+  ["+216", "TN"],
+  ["+218", "LY"],
+  ["+249", "SD"],
+  ["+252", "SO"],
+  ["+253", "DJ"],
+  ["+234", "NG"],
+  ["+254", "KE"],
+  ["+351", "PT"],
+  ["+352", "LU"],
+  ["+353", "IE"],
+  ["+354", "IS"],
+  ["+355", "AL"],
+  ["+356", "MT"],
+  ["+357", "CY"],
+  ["+358", "FI"],
+  ["+359", "BG"],
+  ["+420", "CZ"],
+  ["+421", "SK"],
+  ["+20", "EG"],
+  ["+27", "ZA"],
+  ["+30", "GR"],
+  ["+31", "NL"],
+  ["+32", "BE"],
+  ["+33", "FR"],
+  ["+34", "ES"],
+  ["+36", "HU"],
+  ["+39", "IT"],
+  ["+40", "RO"],
+  ["+41", "CH"],
+  ["+43", "AT"],
+  ["+44", "GB"],
+  ["+45", "DK"],
+  ["+46", "SE"],
+  ["+47", "NO"],
+  ["+48", "PL"],
+  ["+49", "DE"],
+  ["+52", "MX"],
+  ["+54", "AR"],
+  ["+55", "BR"],
+  ["+56", "CL"],
+  ["+57", "CO"],
+  ["+58", "VE"],
+  ["+60", "MY"],
+  ["+61", "AU"],
+  ["+62", "ID"],
+  ["+63", "PH"],
+  ["+64", "NZ"],
+  ["+65", "SG"],
+  ["+66", "TH"],
+  ["+81", "JP"],
+  ["+82", "KR"],
+  ["+84", "VN"],
+  ["+86", "CN"],
+  ["+90", "TR"],
+  ["+91", "IN"],
+  ["+92", "PK"],
+  ["+93", "AF"],
+  ["+94", "LK"],
+  ["+95", "MM"],
+  ["+98", "IR"]
+];
+
 function toValidDate(value) {
   const date = value instanceof Date ? value : new Date(value ?? Date.now());
   return Number.isNaN(date.getTime()) ? new Date() : date;
@@ -184,6 +275,10 @@ export function createJsonFilename(value = new Date()) {
   return createExportFilename("json", value);
 }
 
+export function createCsvFilename(value = new Date()) {
+  return createExportFilename("csv", value);
+}
+
 export function formatLeadCollectionAsJson(
   leads,
   { exportedAt = new Date() } = {}
@@ -201,6 +296,210 @@ export function formatLeadCollectionAsJson(
       2
     ) + "\n"
   );
+}
+
+function getLeadDomain(lead) {
+  const storedHostname = String(lead?.hostname ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^www\./, "");
+
+  if (storedHostname) {
+    return storedHostname;
+  }
+
+  try {
+    return new URL(lead?.sourceUrl).hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function getSocialUrl(link) {
+  return link && typeof link === "object"
+    ? String(link.url ?? "").trim()
+    : String(link ?? "").trim();
+}
+
+function getSocialPlatform(link) {
+  return link && typeof link === "object"
+    ? String(link.platform ?? "").trim().toLowerCase()
+    : "";
+}
+
+function callingNumber(value) {
+  const formattedValue = formatExportPhone(value);
+
+  if (/^https?:/i.test(formattedValue)) {
+    try {
+      const url = new URL(formattedValue);
+      const candidate =
+        url.searchParams.get("phone") ||
+        (url.hostname.toLowerCase() === "wa.me"
+          ? url.pathname.split("/").filter(Boolean)[0]
+          : "");
+      const digits = String(candidate ?? "").replace(/\D/g, "");
+      return digits ? `+${digits.replace(/^00/, "")}` : "";
+    } catch {
+      return "";
+    }
+  }
+
+  const compactValue = formattedValue.replace(/[^\d+]/g, "");
+
+  if (compactValue.startsWith("+")) {
+    return compactValue;
+  }
+
+  if (compactValue.startsWith("00")) {
+    return `+${compactValue.slice(2)}`;
+  }
+
+  const matchingCode = COUNTRY_CALLING_CODES.find(([callingCode]) =>
+    compactValue.startsWith(callingCode.slice(1))
+  );
+
+  return matchingCode ? `+${compactValue}` : "";
+}
+
+function inferCountry(lead) {
+  const countries = new Set();
+  const whatsappSocialLinks = (lead?.socialLinks ?? [])
+    .filter((link) => getSocialPlatform(link) === "whatsapp")
+    .map(getSocialUrl);
+
+  for (const value of [
+    ...(lead?.phones ?? []),
+    ...(lead?.whatsapp ?? []),
+    ...whatsappSocialLinks
+  ]) {
+    const phone = callingNumber(value);
+    const country = COUNTRY_CALLING_CODES.find(([callingCode]) =>
+      phone.startsWith(callingCode)
+    )?.[1];
+
+    if (country) {
+      countries.add(country);
+    }
+  }
+
+  return countries.size === 1 ? Array.from(countries)[0] : "";
+}
+
+function addNote(notes, label, values) {
+  const cleanValues = values.filter(Boolean);
+
+  if (cleanValues.length) {
+    notes.push(`${label}: ${cleanValues.join(" | ")}`);
+  }
+}
+
+export function mapLeadToCsvRow(lead) {
+  const domain = getLeadDomain(lead);
+  const phones = (lead?.phones ?? []).map(formatExportPhone).filter(Boolean);
+  const whatsappNumbers = (lead?.whatsapp ?? [])
+    .map(formatExportPhone)
+    .filter(Boolean);
+  const emails = (lead?.emails ?? []).map(String).filter(Boolean);
+  const socialLinks = Array.isArray(lead?.socialLinks)
+    ? lead.socialLinks
+    : [];
+  const whatsappSocialIndex = socialLinks.findIndex(
+    (link) => getSocialPlatform(link) === "whatsapp"
+  );
+  const whatsappSocial =
+    whatsappSocialIndex === -1 ? null : socialLinks[whatsappSocialIndex];
+  const primaryWhatsapp =
+    whatsappNumbers[0] || getSocialUrl(whatsappSocial);
+  const excludedSocialIndexes = new Set();
+
+  if (!whatsappNumbers.length && whatsappSocialIndex !== -1) {
+    excludedSocialIndexes.add(whatsappSocialIndex);
+  }
+
+  const instagramIndex = socialLinks.findIndex(
+    (link, index) =>
+      !excludedSocialIndexes.has(index) &&
+      getSocialPlatform(link) === "instagram"
+  );
+  const primarySocialIndex =
+    instagramIndex !== -1
+      ? instagramIndex
+      : socialLinks.findIndex(
+          (link, index) =>
+            !excludedSocialIndexes.has(index) && Boolean(getSocialUrl(link))
+        );
+  const primarySocial =
+    primarySocialIndex === -1
+      ? ""
+      : getSocialUrl(socialLinks[primarySocialIndex]);
+  const otherSocials = socialLinks
+    .filter(
+      (_, index) =>
+        index !== primarySocialIndex && !excludedSocialIndexes.has(index)
+    )
+    .map(formatExportSocialLink);
+  const notes = [];
+  const pageTitle = String(lead?.pageTitle ?? "").trim();
+  const capturedAt = String(lead?.capturedAt ?? "").trim();
+  const lastUpdatedAt = String(lead?.lastUpdatedAt ?? "").trim();
+
+  if (pageTitle) {
+    notes.push(`page title: ${pageTitle}`);
+  }
+
+  if (capturedAt) {
+    notes.push(`captured at: ${capturedAt}`);
+  }
+
+  if (lastUpdatedAt) {
+    notes.push(`last updated at: ${lastUpdatedAt}`);
+  }
+
+  addNote(notes, "other phones", phones.slice(1));
+  addNote(notes, "other WhatsApp", whatsappNumbers.slice(1));
+  addNote(notes, "other emails", emails.slice(1));
+  addNote(notes, "other socials", otherSocials);
+  addNote(
+    notes,
+    "external links",
+    (lead?.externalLinks ?? []).map(String)
+  );
+
+  return {
+    name: domain,
+    company_name: domain,
+    phone: phones[0] || "",
+    whatsapp: primaryWhatsapp || "",
+    email: emails[0] || "",
+    website: String(lead?.sourceUrl ?? "").trim(),
+    social_url: primarySocial,
+    country: inferCountry(lead),
+    source: "chrome extension",
+    notes: notes.join("; ")
+  };
+}
+
+function escapeCsvValue(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text)
+    ? `"${text.replace(/"/g, '""')}"`
+    : text;
+}
+
+export function formatLeadCollectionAsCsv(leads) {
+  const leadList = Array.isArray(leads) ? leads : [];
+  const rows = leadList.map(mapLeadToCsvRow);
+  const lines = [
+    CSV_HEADERS.join(","),
+    ...rows.map((row) =>
+      CSV_HEADERS.map((header) => escapeCsvValue(row[header])).join(",")
+    )
+  ];
+
+  return `${lines.join("\r\n")}\r\n`;
 }
 
 async function downloadUtf8File(
@@ -258,5 +557,20 @@ export async function downloadLeadCollectionAsJson(
   return downloadUtf8File(json, {
     filename,
     mimeType: "application/json"
+  });
+}
+
+export async function downloadLeadCollectionAsCsv(
+  leads,
+  { exportedAt = new Date() } = {}
+) {
+  const exportDate = toValidDate(exportedAt);
+  const csv = formatLeadCollectionAsCsv(leads);
+  const filename = createCsvFilename(exportDate);
+
+  return downloadUtf8File(csv, {
+    filename,
+    mimeType: "text/csv",
+    includeBom: true
   });
 }

@@ -13,10 +13,11 @@ normalization utilities, a review-first capture preview, and persistent lead
 storage with duplicate replace/merge handling. The collected leads page supports
 batched card rendering, search, copy, source opening, detail expansion, and
 deletion. The popup can export the complete collection as a UTF-8 TXT file and
-as pretty-printed UTF-8 JSON. Both formats offer to keep or clear stored leads
-only after the download starts. Missing Phone and WhatsApp numbers can be added
-manually during preview. WhatsApp numbers are also detected from embedded widget
-configuration such as JoinChat `data-settings` JSON and button data attributes.
+as pretty-printed UTF-8 JSON, plus a lead-engine-compatible UTF-8 CSV file. All
+formats offer to keep or clear stored leads only after the download starts.
+Missing Phone and WhatsApp numbers can be added manually during preview.
+WhatsApp numbers are also detected from embedded widget configuration such as
+JoinChat `data-settings` JSON and button data attributes.
 Email addresses are collected from visible content, `mailto:` links, metadata,
 contact controls, `data-email` attributes, and common obfuscated formats.
 
