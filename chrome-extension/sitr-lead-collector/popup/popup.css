@@ -279,3 +279,37 @@ h2 {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+
+.duplicate-warning {
+  padding: 12px;
+  border: 1px solid #f1d28a;
+  border-radius: 10px;
+  color: #6f4c08;
+  background: #fff7df;
+}
+
+.duplicate-warning[hidden] {
+  display: none;
+}
+
+.duplicate-warning strong,
+.duplicate-warning p {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.duplicate-warning p {
+  margin: 4px 0 10px;
+}
+
+.duplicate-warning__actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.duplicate-warning__actions .button {
+  min-height: 36px;
+  padding: 8px;
+  font-size: 11px;
+}

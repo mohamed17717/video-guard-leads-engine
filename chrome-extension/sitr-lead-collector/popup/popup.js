@@ -1,4 +1,9 @@
-import { getLeadCount } from "../services/storage.js";
+import {
+  addLead,
+  clearAllLeads,
+  getLeadCount,
+  STORAGE_KEY
+} from "../services/storage.js";
 import { normalizeExtractedData } from "../services/normalizer.js";
 
 const statusMessage = document.querySelector("#status-message");
@@ -7,14 +12,19 @@ const captureButton = document.querySelector("#capture-page");
 const preview = document.querySelector("#lead-preview");
 const saveLeadButton = document.querySelector("#save-lead");
 const cancelPreviewButton = document.querySelector("#cancel-preview");
+const duplicateWarning = document.querySelector("#duplicate-warning");
+const replaceLeadButton = document.querySelector("#replace-lead");
+const mergeLeadButton = document.querySelector("#merge-lead");
+const cancelDuplicateButton = document.querySelector("#cancel-duplicate");
+const clearAllButton = document.querySelector("#clear-all");
 
 let pendingLead = null;
+let storageOperationPending = false;
 
 const placeholderActions = {
   "#view-leads": "The collected leads view will be added in a later task.",
   "#export-txt": "TXT export will be added in a later task.",
-  "#export-json": "JSON export will be added in a later task.",
-  "#clear-all": "Clearing collected leads will be added in a later task."
+  "#export-json": "JSON export will be added in a later task."
 };
 
 function setStatus(message, state = "neutral") {
@@ -108,7 +118,35 @@ function getUsefulValueCount(lead) {
   );
 }
 
+function updateSaveButton() {
+  saveLeadButton.disabled =
+    storageOperationPending ||
+    !pendingLead ||
+    getUsefulValueCount(pendingLead) === 0 ||
+    !duplicateWarning.hidden;
+}
+
+function hideDuplicateWarning() {
+  duplicateWarning.hidden = true;
+  updateSaveButton();
+}
+
+function showDuplicateWarning() {
+  duplicateWarning.hidden = false;
+  updateSaveButton();
+}
+
+function setStorageLoading(isLoading) {
+  storageOperationPending = isLoading;
+  replaceLeadButton.disabled = isLoading;
+  mergeLeadButton.disabled = isLoading;
+  cancelDuplicateButton.disabled = isLoading;
+  clearAllButton.disabled = isLoading;
+  updateSaveButton();
+}
+
 function renderPreview(lead) {
+  hideDuplicateWarning();
   document.querySelector("#preview-page").textContent =
     lead.pageTitle || lead.hostname || "Untitled page";
 
@@ -130,15 +168,14 @@ function renderPreview(lead) {
   );
   renderLinkList("#preview-external", lead.externalLinks, (url) => url);
 
-  const hasUsefulData = getUsefulValueCount(lead) > 0;
-  saveLeadButton.disabled = !hasUsefulData;
   preview.hidden = false;
+  updateSaveButton();
 }
 
 function hidePreview() {
   pendingLead = null;
   preview.hidden = true;
-  saveLeadButton.disabled = true;
+  hideDuplicateWarning();
 }
 
 async function getActiveTab() {
@@ -224,21 +261,104 @@ cancelPreviewButton.addEventListener("click", () => {
   setStatus("Capture cancelled. No lead was saved.");
 });
 
-saveLeadButton.addEventListener("click", () => {
+async function refreshLeadCount() {
+  leadCount.textContent = String(await getLeadCount());
+}
+
+async function storePendingLead(onDuplicate = "reject") {
   if (!pendingLead) {
     setStatus("Capture a page before saving a lead.", "error");
     return;
   }
 
-  setStatus(
-    "Lead reviewed. Persistent saving will be connected in a later task.",
-    "success"
-  );
+  setStorageLoading(true);
+  setStatus("Saving lead…");
+
+  try {
+    const result = await addLead(pendingLead, { onDuplicate });
+    await refreshLeadCount();
+
+    if (result.status === "duplicate") {
+      showDuplicateWarning();
+      setStatus(
+        "This page was captured before. Replace it, merge it, or cancel.",
+        "warning"
+      );
+      return;
+    }
+
+    const successMessage = {
+      added: "Lead saved.",
+      replaced: "The previous lead was replaced.",
+      merged: "The new values were merged into the existing lead."
+    }[result.status];
+
+    hidePreview();
+    setStatus(successMessage ?? "Lead saved.", "success");
+  } catch (error) {
+    console.error("Unable to save lead.", error);
+    setStatus("The lead could not be saved. Please try again.", "error");
+  } finally {
+    setStorageLoading(false);
+  }
+}
+
+saveLeadButton.addEventListener("click", () => {
+  storePendingLead();
 });
+
+replaceLeadButton.addEventListener("click", () => {
+  storePendingLead("replace");
+});
+
+mergeLeadButton.addEventListener("click", () => {
+  storePendingLead("merge");
+});
+
+cancelDuplicateButton.addEventListener("click", () => {
+  hideDuplicateWarning();
+  setStatus("Duplicate save cancelled. The preview is still available.");
+});
+
+clearAllButton.addEventListener("click", async () => {
+  const confirmed = window.confirm(
+    "Clear every saved lead? This action cannot be undone."
+  );
+
+  if (!confirmed) {
+    setStatus("Clear cancelled. No leads were removed.");
+    return;
+  }
+
+  setStorageLoading(true);
+
+  try {
+    await clearAllLeads();
+    await refreshLeadCount();
+    hideDuplicateWarning();
+    setStatus("All saved leads were cleared.", "success");
+  } catch (error) {
+    console.error("Unable to clear leads.", error);
+    setStatus("Saved leads could not be cleared.", "error");
+  } finally {
+    setStorageLoading(false);
+  }
+});
+
+if (chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local" || !changes[STORAGE_KEY]) {
+      return;
+    }
+
+    const leads = changes[STORAGE_KEY].newValue;
+    leadCount.textContent = String(Array.isArray(leads) ? leads.length : 0);
+  });
+}
 
 async function initializePopup() {
   try {
-    leadCount.textContent = String(await getLeadCount());
+    await refreshLeadCount();
   } catch (error) {
     console.error("Unable to read stored lead count.", error);
     setStatus("Unable to read collected leads.");

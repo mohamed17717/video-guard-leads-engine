@@ -9,8 +9,8 @@ presses **Capture This Page**. Page extraction is not run automatically.
 ## Current status
 
 This version contains the project structure, tested page extraction and
-normalization utilities, and a review-first capture preview in the popup.
-Persistent saving, lead viewing, export, storage, and clearing behavior remain
+normalization utilities, a review-first capture preview, and persistent lead
+storage with duplicate replace/merge handling. Lead viewing and export remain
 placeholders for later tasks.
 
 ## Load the extension in Chrome
@@ -47,6 +47,7 @@ sitr-lead-collector/
 │   └── icon128.png
 ├── tests/
 │   ├── extractor.test.js
-│   └── normalizer.test.js
+│   ├── normalizer.test.js
+│   └── storage.test.js
 └── README.md
 ```
