@@ -1,4 +1,10 @@
-import { formatLeadAsText } from "../services/exporter.js";
+import {
+  copyTextToClipboard,
+  formatExternalLinksForCopy,
+  formatLeadsForCopy,
+  formatPhoneNumbersForCopy,
+  formatSocialLinksForCopy
+} from "../services/clipboard.js";
 import {
   deleteLead,
   getAllLeads,
@@ -15,6 +21,7 @@ const resultsMeta = document.querySelector("#results-meta");
 const searchInput = document.querySelector("#lead-search");
 const clearSearchButton = document.querySelector("#clear-search");
 const statusMessage = document.querySelector("#viewer-status");
+const copyAllLeadsButton = document.querySelector("#copy-all-leads");
 
 let allLeads = [];
 let filteredLeads = [];
@@ -136,6 +143,7 @@ function renderSummary() {
     "Social Link",
     "Social Links"
   );
+  copyAllLeadsButton.disabled = allLeads.length === 0;
 }
 
 function formatCapturedAt(value) {
@@ -202,7 +210,30 @@ function createLeadCard(lead) {
   actions.className = "lead-card__actions";
   const openButton = createActionButton("Open Source", "open");
   openButton.disabled = !isWebUrl(lead.sourceUrl);
-  const copyButton = createActionButton("Copy as Text", "copy");
+  const copyPhonesButton = createActionButton(
+    "Copy Phones",
+    "copy-phones"
+  );
+  copyPhonesButton.disabled = !lead.phones?.length;
+  const copyWhatsappButton = createActionButton(
+    "Copy WhatsApp",
+    "copy-whatsapp"
+  );
+  copyWhatsappButton.disabled = !lead.whatsapp?.length;
+  const copySocialButton = createActionButton(
+    "Copy Social Links",
+    "copy-social"
+  );
+  copySocialButton.disabled = !lead.socialLinks?.length;
+  const copyExternalButton = createActionButton(
+    "Copy External Links",
+    "copy-external"
+  );
+  copyExternalButton.disabled = !lead.externalLinks?.length;
+  const copyLeadButton = createActionButton(
+    "Copy Complete Lead",
+    "copy-lead"
+  );
   const deleteButton = createActionButton(
     "Delete",
     "delete",
@@ -211,7 +242,16 @@ function createLeadCard(lead) {
   const expandButton = createActionButton("Expand Details", "toggle");
   expandButton.setAttribute("aria-expanded", "false");
   expandButton.setAttribute("aria-controls", detailsId);
-  actions.append(openButton, copyButton, deleteButton, expandButton);
+  actions.append(
+    openButton,
+    copyPhonesButton,
+    copyWhatsappButton,
+    copySocialButton,
+    copyExternalButton,
+    copyLeadButton,
+    deleteButton,
+    expandButton
+  );
 
   top.append(identity, actions);
 
@@ -383,26 +423,6 @@ async function loadLeads() {
   }
 }
 
-async function copyText(value) {
-  try {
-    await navigator.clipboard.writeText(value);
-    return;
-  } catch {
-    const textArea = document.createElement("textarea");
-    textArea.value = value;
-    textArea.style.position = "fixed";
-    textArea.style.opacity = "0";
-    document.body.append(textArea);
-    textArea.select();
-    const copied = document.execCommand("copy");
-    textArea.remove();
-
-    if (!copied) {
-      throw new Error("Clipboard copy failed.");
-    }
-  }
-}
-
 async function handleDelete(lead, button) {
   const title = lead.pageTitle || lead.hostname || "this lead";
   const confirmed = window.confirm(`Delete "${title}"?`);
@@ -432,6 +452,47 @@ async function handleDelete(lead, button) {
   }
 }
 
+const LEAD_COPY_ACTIONS = {
+  "copy-phones": {
+    getText: (lead) => formatPhoneNumbersForCopy(lead.phones),
+    emptyMessage: "There are no phone numbers to copy."
+  },
+  "copy-whatsapp": {
+    getText: (lead) => formatPhoneNumbersForCopy(lead.whatsapp),
+    emptyMessage: "There are no WhatsApp numbers to copy."
+  },
+  "copy-social": {
+    getText: (lead) => formatSocialLinksForCopy(lead.socialLinks),
+    emptyMessage: "There are no social links to copy."
+  },
+  "copy-external": {
+    getText: (lead) => formatExternalLinksForCopy(lead.externalLinks),
+    emptyMessage: "There are no external links to copy."
+  },
+  "copy-lead": {
+    getText: (lead) => formatLeadsForCopy([lead]),
+    emptyMessage: "There is no lead to copy."
+  }
+};
+
+async function handleLeadCopy(lead, action) {
+  const copyAction = LEAD_COPY_ACTIONS[action];
+  const text = copyAction.getText(lead);
+
+  if (!text) {
+    setStatus(copyAction.emptyMessage);
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(text);
+    setStatus("Copied successfully", "success");
+  } catch (error) {
+    console.error("Unable to copy lead data.", error);
+    setStatus("The selected data could not be copied.", "error");
+  }
+}
+
 cardsContainer.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-action]");
 
@@ -457,14 +518,8 @@ cardsContainer.addEventListener("click", async (event) => {
     return;
   }
 
-  if (button.dataset.action === "copy") {
-    try {
-      await copyText(formatLeadAsText(lead));
-      setStatus("Lead copied as text.", "success");
-    } catch (error) {
-      console.error("Unable to copy lead.", error);
-      setStatus("The lead could not be copied.", "error");
-    }
+  if (LEAD_COPY_ACTIONS[button.dataset.action]) {
+    await handleLeadCopy(lead, button.dataset.action);
     return;
   }
 
@@ -484,6 +539,25 @@ cardsContainer.addEventListener("click", async (event) => {
     details.hidden = !willExpand;
     button.textContent = willExpand ? "Collapse Details" : "Expand Details";
     button.setAttribute("aria-expanded", String(willExpand));
+  }
+});
+
+copyAllLeadsButton.addEventListener("click", async () => {
+  if (!allLeads.length) {
+    setStatus("There are no saved leads to copy.");
+    return;
+  }
+
+  copyAllLeadsButton.disabled = true;
+
+  try {
+    await copyTextToClipboard(formatLeadsForCopy(allLeads));
+    setStatus("Copied successfully", "success");
+  } catch (error) {
+    console.error("Unable to copy all leads.", error);
+    setStatus("The leads could not be copied.", "error");
+  } finally {
+    copyAllLeadsButton.disabled = allLeads.length === 0;
   }
 });
 

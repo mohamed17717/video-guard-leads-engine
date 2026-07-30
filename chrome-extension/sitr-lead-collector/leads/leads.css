@@ -150,8 +150,32 @@ h2 {
   margin-bottom: 16px;
 }
 
+.viewer__controls {
+  display: flex;
+  width: min(590px, 100%);
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .search-field {
   width: min(430px, 100%);
+}
+
+.toolbar-button {
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border: 1px solid #cbd4ff;
+  border-radius: 10px;
+  color: #2856df;
+  background: #f3f6ff;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.toolbar-button:hover {
+  background: #e8edff;
 }
 
 .search-field input {
@@ -409,6 +433,12 @@ h2 {
 
   .page-header,
   .viewer__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .viewer__controls {
+    width: 100%;
     align-items: stretch;
     flex-direction: column;
   }

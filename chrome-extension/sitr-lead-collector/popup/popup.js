@@ -10,6 +10,13 @@ import {
   downloadLeadCollectionAsJson,
   downloadLeadCollectionAsTxt
 } from "../services/exporter.js";
+import {
+  copyTextToClipboard,
+  formatExternalLinksForCopy,
+  formatLeadsForCopy,
+  formatPhoneNumbersForCopy,
+  formatSocialLinksForCopy
+} from "../services/clipboard.js";
 import { extractPhonesFromText } from "../services/extractor.js";
 import {
   normalizeExtractedData,
@@ -44,6 +51,26 @@ const addManualPhoneButton = document.querySelector("#add-manual-phone");
 const addManualWhatsappButton = document.querySelector(
   "#add-manual-whatsapp"
 );
+const copyPreviewPhonesButton = document.querySelector(
+  "#copy-preview-phones"
+);
+const copyPreviewWhatsappButton = document.querySelector(
+  "#copy-preview-whatsapp"
+);
+const copyPreviewSocialButton = document.querySelector(
+  "#copy-preview-social"
+);
+const copyPreviewExternalButton = document.querySelector(
+  "#copy-preview-external"
+);
+const copyPreviewLeadButton = document.querySelector("#copy-preview-lead");
+const previewCopyButtons = [
+  copyPreviewPhonesButton,
+  copyPreviewWhatsappButton,
+  copyPreviewSocialButton,
+  copyPreviewExternalButton,
+  copyPreviewLeadButton
+];
 
 let pendingLead = null;
 let storageOperationPending = false;
@@ -184,7 +211,25 @@ function setStorageLoading(isLoading) {
   manualWhatsappInput.disabled = isLoading;
   addManualPhoneButton.disabled = isLoading;
   addManualWhatsappButton.disabled = isLoading;
+  for (const button of previewCopyButtons) {
+    button.disabled = isLoading || button.dataset.empty === "true";
+  }
   updateSaveButton();
+}
+
+function setPreviewCopyAvailability(lead) {
+  const availability = new Map([
+    [copyPreviewPhonesButton, Boolean(lead?.phones?.length)],
+    [copyPreviewWhatsappButton, Boolean(lead?.whatsapp?.length)],
+    [copyPreviewSocialButton, Boolean(lead?.socialLinks?.length)],
+    [copyPreviewExternalButton, Boolean(lead?.externalLinks?.length)],
+    [copyPreviewLeadButton, Boolean(lead)]
+  ]);
+
+  for (const [button, isAvailable] of availability) {
+    button.dataset.empty = String(!isAvailable);
+    button.disabled = storageOperationPending || !isAvailable;
+  }
 }
 
 function renderPreview(lead) {
@@ -218,6 +263,7 @@ function renderPreview(lead) {
 
     return link.text ? `${link.text}: ${link.url}` : link.url;
   });
+  setPreviewCopyAvailability(lead);
 
   preview.hidden = false;
   updateSaveButton();
@@ -228,8 +274,66 @@ function hidePreview() {
   preview.hidden = true;
   manualPhoneInput.value = "";
   manualWhatsappInput.value = "";
+  setPreviewCopyAvailability(null);
   hideDuplicateWarning();
 }
+
+async function copyPreviewText(getText, emptyMessage) {
+  if (!pendingLead) {
+    setStatus("Capture a page before copying lead data.", "warning");
+    return;
+  }
+
+  const text = getText(pendingLead);
+
+  if (!text) {
+    setStatus(emptyMessage, "warning");
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(text);
+    setStatus("Copied successfully", "success");
+  } catch (error) {
+    console.error("Unable to copy preview data.", error);
+    setStatus("The selected data could not be copied.", "error");
+  }
+}
+
+copyPreviewPhonesButton.addEventListener("click", () => {
+  copyPreviewText(
+    (lead) => formatPhoneNumbersForCopy(lead.phones),
+    "There are no phone numbers to copy."
+  );
+});
+
+copyPreviewWhatsappButton.addEventListener("click", () => {
+  copyPreviewText(
+    (lead) => formatPhoneNumbersForCopy(lead.whatsapp),
+    "There are no WhatsApp numbers to copy."
+  );
+});
+
+copyPreviewSocialButton.addEventListener("click", () => {
+  copyPreviewText(
+    (lead) => formatSocialLinksForCopy(lead.socialLinks),
+    "There are no social links to copy."
+  );
+});
+
+copyPreviewExternalButton.addEventListener("click", () => {
+  copyPreviewText(
+    (lead) => formatExternalLinksForCopy(lead.externalLinks),
+    "There are no external links to copy."
+  );
+});
+
+copyPreviewLeadButton.addEventListener("click", () => {
+  copyPreviewText(
+    (lead) => formatLeadsForCopy([lead]),
+    "There is no lead to copy."
+  );
+});
 
 function addManualNumber(field, input, label) {
   if (!pendingLead) {

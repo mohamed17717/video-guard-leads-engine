@@ -30,6 +30,10 @@ Twitter and X domains and `other` for recognized secondary social networks.
 Login, OAuth, share-control, tracking-redirect, empty-profile, and current-page
 links are excluded. External links retain normalized URL, shortened anchor text,
 and a `website` type while legacy string links remain compatible.
+The capture preview and saved-lead cards provide quick copy actions for phone,
+WhatsApp, social, and external values. Complete-lead and `Copy All Leads`
+actions reuse the exact TXT export format and report success through inline
+status messages.
 
 ## Load the extension in Chrome
 
@@ -62,6 +66,7 @@ sitr-lead-collector/
 │   ├── storage.js
 │   ├── extractor.js
 │   ├── normalizer.js
+│   ├── clipboard.js
 │   └── exporter.js
 ├── icons/
 │   ├── icon16.png
@@ -69,6 +74,7 @@ sitr-lead-collector/
 │   └── icon128.png
 ├── tests/
 │   ├── exporter.test.js
+│   ├── clipboard.test.js
 │   ├── extractor.test.js
 │   ├── normalizer.test.js
 │   └── storage.test.js

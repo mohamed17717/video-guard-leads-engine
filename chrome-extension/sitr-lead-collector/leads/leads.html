@@ -50,15 +50,20 @@
             <p class="eyebrow">Lead library</p>
             <h2 id="viewer-heading">Saved pages</h2>
           </div>
-          <label class="search-field">
-            <span class="visually-hidden">Search collected leads</span>
-            <input
-              id="lead-search"
-              type="search"
-              placeholder="Search titles, URLs, phones, emails, and links"
-              autocomplete="off"
-            >
-          </label>
+          <div class="viewer__controls">
+            <button id="copy-all-leads" class="toolbar-button" type="button" disabled>
+              Copy All Leads
+            </button>
+            <label class="search-field">
+              <span class="visually-hidden">Search collected leads</span>
+              <input
+                id="lead-search"
+                type="search"
+                placeholder="Search titles, URLs, phones, emails, and links"
+                autocomplete="off"
+              >
+            </label>
+          </div>
         </div>
 
         <div class="results-row">
