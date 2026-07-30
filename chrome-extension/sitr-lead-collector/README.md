@@ -10,8 +10,9 @@ presses **Capture This Page**. Page extraction is not run automatically.
 
 This version contains the project structure, tested page extraction and
 normalization utilities, a review-first capture preview, and persistent lead
-storage with duplicate replace/merge handling. Lead viewing and export remain
-placeholders for later tasks.
+storage with duplicate replace/merge handling. The collected leads page supports
+batched card rendering, search, copy, source opening, detail expansion, and
+deletion. File export remains a placeholder for a later task.
 
 ## Load the extension in Chrome
 
@@ -34,6 +35,10 @@ sitr-lead-collector/
 │   ├── popup.html
 │   ├── popup.css
 │   └── popup.js
+├── leads/
+│   ├── leads.html
+│   ├── leads.css
+│   └── leads.js
 ├── scripts/
 │   └── content.js
 ├── services/
@@ -46,6 +51,7 @@ sitr-lead-collector/
 │   ├── icon48.png
 │   └── icon128.png
 ├── tests/
+│   ├── exporter.test.js
 │   ├── extractor.test.js
 │   ├── normalizer.test.js
 │   └── storage.test.js

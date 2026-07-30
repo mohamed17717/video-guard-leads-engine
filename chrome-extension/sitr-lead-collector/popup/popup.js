@@ -22,7 +22,6 @@ let pendingLead = null;
 let storageOperationPending = false;
 
 const placeholderActions = {
-  "#view-leads": "The collected leads view will be added in a later task.",
   "#export-txt": "TXT export will be added in a later task.",
   "#export-json": "JSON export will be added in a later task."
 };
@@ -255,6 +254,18 @@ async function captureCurrentPage() {
 }
 
 captureButton.addEventListener("click", captureCurrentPage);
+
+document.querySelector("#view-leads").addEventListener("click", async () => {
+  try {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL("leads/leads.html")
+    });
+    window.close();
+  } catch (error) {
+    console.error("Unable to open collected leads.", error);
+    setStatus("The collected leads view could not be opened.", "error");
+  }
+});
 
 cancelPreviewButton.addEventListener("click", () => {
   hidePreview();

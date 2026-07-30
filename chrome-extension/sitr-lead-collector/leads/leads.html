@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collected Leads — Sitr Lead Collector</title>
+    <link rel="stylesheet" href="leads.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">S</div>
+          <div>
+            <p class="eyebrow">Sitr Lead Collector</p>
+            <h1>Collected Leads</h1>
+          </div>
+        </div>
+        <p class="page-header__description">
+          Search, review, copy, open, or remove saved leads.
+        </p>
+      </header>
+
+      <section class="summary-grid" aria-label="Lead collection totals">
+        <article class="summary-card">
+          <strong id="total-leads">0</strong>
+          <span id="total-leads-label">Leads</span>
+        </article>
+        <article class="summary-card">
+          <strong id="total-phones">0</strong>
+          <span id="total-phones-label">Phone Numbers</span>
+        </article>
+        <article class="summary-card">
+          <strong id="total-whatsapp">0</strong>
+          <span id="total-whatsapp-label">WhatsApp Numbers</span>
+        </article>
+        <article class="summary-card">
+          <strong id="total-social">0</strong>
+          <span id="total-social-label">Social Links</span>
+        </article>
+      </section>
+
+      <section class="viewer" aria-labelledby="viewer-heading">
+        <div class="viewer__toolbar">
+          <div>
+            <p class="eyebrow">Lead library</p>
+            <h2 id="viewer-heading">Saved pages</h2>
+          </div>
+          <label class="search-field">
+            <span class="visually-hidden">Search collected leads</span>
+            <input
+              id="lead-search"
+              type="search"
+              placeholder="Search titles, URLs, phones, and links"
+              autocomplete="off"
+            >
+          </label>
+        </div>
+
+        <div class="results-row">
+          <p id="results-meta">Loading leads…</p>
+          <button id="clear-search" class="text-button" type="button" hidden>
+            Clear search
+          </button>
+        </div>
+
+        <p id="viewer-status" class="status" role="status" aria-live="polite"></p>
+
+        <div id="lead-cards" class="lead-cards" aria-live="polite"></div>
+
+        <div id="empty-state" class="empty-state" hidden>
+          <h3>No leads found</h3>
+          <p id="empty-message">Capture a page to start your lead collection.</p>
+        </div>
+
+        <button id="load-more" class="load-more" type="button" hidden>
+          Load 50 more
+        </button>
+      </section>
+    </main>
+
+    <script type="module" src="leads.js"></script>
+  </body>
+</html>
