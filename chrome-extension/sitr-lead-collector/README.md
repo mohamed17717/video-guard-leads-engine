@@ -12,7 +12,9 @@ This version contains the project structure, tested page extraction and
 normalization utilities, a review-first capture preview, and persistent lead
 storage with duplicate replace/merge handling. The collected leads page supports
 batched card rendering, search, copy, source opening, detail expansion, and
-deletion. File export remains a placeholder for a later task.
+deletion. The popup can export the complete collection as a UTF-8 TXT file and
+offers to keep or clear stored leads only after the download starts. JSON export
+remains a placeholder for a later task.
 
 ## Load the extension in Chrome
 

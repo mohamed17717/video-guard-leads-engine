@@ -313,3 +313,34 @@ h2 {
   padding: 8px;
   font-size: 11px;
 }
+
+.export-dialog {
+  width: min(340px, calc(100% - 32px));
+  padding: 20px;
+  border: 1px solid #d9dde7;
+  border-radius: 14px;
+  color: #172033;
+  background: #ffffff;
+  box-shadow: 0 20px 50px rgb(23 32 51 / 25%);
+}
+
+.export-dialog::backdrop {
+  background: rgb(23 32 51 / 48%);
+}
+
+.export-dialog h2 {
+  margin-bottom: 8px;
+}
+
+.export-dialog p {
+  margin: 0 0 18px;
+  color: #596176;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.export-dialog__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}

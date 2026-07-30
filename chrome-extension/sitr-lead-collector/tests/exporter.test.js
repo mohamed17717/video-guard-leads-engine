@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatLeadAsText } from "../services/exporter.js";
+import {
+  createTxtFilename,
+  downloadLeadCollectionAsTxt,
+  formatLeadAsText,
+  formatLeadCollectionAsText
+} from "../services/exporter.js";
 
 test("formats a lead as readable plain text", () => {
   const text = formatLeadAsText({
@@ -57,4 +62,94 @@ test("formats missing lead values without throwing", () => {
   assert.match(text, /Page Title: Untitled page/);
   assert.match(text, /Source URL: None/);
   assert.match(text, /Phones\n- None/);
+});
+
+test("formats the complete TXT collection with separators and Arabic text", () => {
+  const text = formatLeadCollectionAsText(
+    [
+      {
+        pageTitle: "أكاديمية أحمد",
+        sourceUrl: "https://facebook.com/ahmedacademy",
+        hostname: "facebook.com",
+        capturedAt: "2026-07-30T03:20:00.000Z",
+        phones: [
+          {
+            raw: "01012345678",
+            normalized: "+201012345678"
+          }
+        ],
+        whatsapp: ["https://wa.me/201012345678"],
+        socialLinks: [
+          {
+            platform: "youtube",
+            url: "https://youtube.com/@ahmedacademy"
+          }
+        ],
+        externalLinks: ["https://ahmedacademy.com"]
+      }
+    ],
+    { exportedAt: "2026-07-30T04:00:00.000Z" }
+  );
+
+  assert.match(text, /^SITR LEAD COLLECTION/);
+  assert.match(text, /Exported At: 2026-07-30T04:00:00Z/);
+  assert.match(text, /Total Leads: 1/);
+  assert.match(text, /LEAD 1/);
+  assert.match(text, /Page Title:\nأكاديمية أحمد/);
+  assert.match(text, /Phone Numbers:\n- \+201012345678/);
+  assert.match(
+    text,
+    /Social Links:\n- YouTube: https:\/\/youtube.com\/@ahmedacademy/
+  );
+  assert.match(text, /END LEAD/);
+});
+
+test("creates the requested UTC TXT filename", () => {
+  assert.equal(
+    createTxtFilename("2026-07-30T04:00:00.000Z"),
+    "sitr-leads-2026-07-30-0400.txt"
+  );
+});
+
+test("starts a Chrome download with a UTF-8 text blob", async () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  let exportedBlob = null;
+  let downloadOptions = null;
+  let revokedUrl = null;
+
+  URL.createObjectURL = (blob) => {
+    exportedBlob = blob;
+    return "blob:test-export";
+  };
+  URL.revokeObjectURL = (url) => {
+    revokedUrl = url;
+  };
+  globalThis.chrome = {
+    downloads: {
+      async download(options) {
+        downloadOptions = options;
+        return 42;
+      }
+    }
+  };
+
+  try {
+    const result = await downloadLeadCollectionAsTxt([], {
+      exportedAt: "2026-07-30T04:00:00.000Z"
+    });
+
+    assert.deepEqual(result, {
+      downloadId: 42,
+      filename: "sitr-leads-2026-07-30-0400.txt"
+    });
+    assert.equal(downloadOptions.url, "blob:test-export");
+    assert.equal(downloadOptions.filename, result.filename);
+    assert.equal(exportedBlob.type, "text/plain;charset=utf-8");
+    assert.match(await exportedBlob.text(), /SITR LEAD COLLECTION/);
+    assert.equal(revokedUrl, "blob:test-export");
+  } finally {
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  }
 });

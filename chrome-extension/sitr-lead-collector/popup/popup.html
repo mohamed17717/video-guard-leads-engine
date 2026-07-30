@@ -138,6 +138,22 @@
       </p>
     </main>
 
+    <dialog id="txt-export-dialog" class="export-dialog">
+      <h2>TXT export started</h2>
+      <p>
+        The file was downloaded successfully.<br>
+        Do you want to clear the stored leads?
+      </p>
+      <div class="export-dialog__actions">
+        <button id="clear-after-txt-export" class="button button--danger" type="button">
+          Clear Leads
+        </button>
+        <button id="keep-after-txt-export" class="button button--primary" type="button">
+          Keep Leads
+        </button>
+      </div>
+    </dialog>
+
     <script type="module" src="popup.js"></script>
   </body>
 </html>

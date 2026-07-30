@@ -1,9 +1,11 @@
 import {
   addLead,
   clearAllLeads,
+  getAllLeads,
   getLeadCount,
   STORAGE_KEY
 } from "../services/storage.js";
+import { downloadLeadCollectionAsTxt } from "../services/exporter.js";
 import { normalizeExtractedData } from "../services/normalizer.js";
 
 const statusMessage = document.querySelector("#status-message");
@@ -17,12 +19,19 @@ const replaceLeadButton = document.querySelector("#replace-lead");
 const mergeLeadButton = document.querySelector("#merge-lead");
 const cancelDuplicateButton = document.querySelector("#cancel-duplicate");
 const clearAllButton = document.querySelector("#clear-all");
+const exportTxtButton = document.querySelector("#export-txt");
+const exportDialog = document.querySelector("#txt-export-dialog");
+const clearAfterExportButton = document.querySelector(
+  "#clear-after-txt-export"
+);
+const keepAfterExportButton = document.querySelector(
+  "#keep-after-txt-export"
+);
 
 let pendingLead = null;
 let storageOperationPending = false;
 
 const placeholderActions = {
-  "#export-txt": "TXT export will be added in a later task.",
   "#export-json": "JSON export will be added in a later task."
 };
 
@@ -141,6 +150,7 @@ function setStorageLoading(isLoading) {
   mergeLeadButton.disabled = isLoading;
   cancelDuplicateButton.disabled = isLoading;
   clearAllButton.disabled = isLoading;
+  exportTxtButton.disabled = isLoading;
   updateSaveButton();
 }
 
@@ -354,6 +364,61 @@ clearAllButton.addEventListener("click", async () => {
   } finally {
     setStorageLoading(false);
   }
+});
+
+exportTxtButton.addEventListener("click", async () => {
+  setStorageLoading(true);
+  setStatus("Preparing TXT export…");
+
+  try {
+    const leads = await getAllLeads();
+
+    if (!leads.length) {
+      setStatus("There are no stored leads to export.", "warning");
+      return;
+    }
+
+    await downloadLeadCollectionAsTxt(leads);
+    setStatus("TXT download started successfully.", "success");
+    exportDialog.showModal();
+  } catch (error) {
+    console.error("Unable to export leads as TXT.", error);
+    setStatus("The TXT file could not be downloaded.", "error");
+  } finally {
+    setStorageLoading(false);
+  }
+});
+
+keepAfterExportButton.addEventListener("click", () => {
+  exportDialog.close();
+  setStatus("TXT downloaded. Stored leads were kept.", "success");
+});
+
+clearAfterExportButton.addEventListener("click", async () => {
+  clearAfterExportButton.disabled = true;
+  keepAfterExportButton.disabled = true;
+
+  try {
+    await clearAllLeads();
+    await refreshLeadCount();
+    hideDuplicateWarning();
+    exportDialog.close();
+    setStatus("TXT downloaded and stored leads were cleared.", "success");
+  } catch (error) {
+    console.error("Unable to clear leads after export.", error);
+    exportDialog.close();
+    setStatus(
+      "TXT downloaded, but the stored leads could not be cleared.",
+      "error"
+    );
+  } finally {
+    clearAfterExportButton.disabled = false;
+    keepAfterExportButton.disabled = false;
+  }
+});
+
+exportDialog.addEventListener("cancel", () => {
+  setStatus("TXT downloaded. Stored leads were kept.", "success");
 });
 
 if (chrome.storage?.onChanged) {
