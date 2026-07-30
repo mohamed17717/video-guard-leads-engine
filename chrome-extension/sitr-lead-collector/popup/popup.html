@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sitr Lead Collector</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup">
+      <header class="popup__header">
+        <div class="brand-mark" aria-hidden="true">S</div>
+        <div>
+          <p class="eyebrow">Sitr</p>
+          <h1>Lead Collector</h1>
+        </div>
+      </header>
+
+      <section class="summary" aria-label="Collection summary">
+        <span>Total captured leads</span>
+        <strong id="lead-count">0</strong>
+      </section>
+
+      <button id="capture-page" class="button button--primary" type="button">
+        Capture This Page
+      </button>
+
+      <button id="view-leads" class="button button--secondary" type="button">
+        View Collected Leads
+      </button>
+
+      <div class="button-row">
+        <button id="export-txt" class="button button--secondary" type="button">
+          Export TXT
+        </button>
+        <button id="export-json" class="button button--secondary" type="button">
+          Export JSON
+        </button>
+      </div>
+
+      <button id="clear-all" class="button button--danger" type="button">
+        Clear All
+      </button>
+
+      <p id="status-message" class="status" role="status" aria-live="polite">
+        Ready to capture a page.
+      </p>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
