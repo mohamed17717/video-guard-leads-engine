@@ -30,7 +30,12 @@ function setStatus(message = "", state = "neutral") {
 
 function getPhoneText(phone) {
   if (phone && typeof phone === "object") {
-    return [phone.raw, phone.normalized].filter(Boolean).join(" ");
+    return [
+      phone.raw,
+      phone.normalized,
+      phone.source,
+      phone.context
+    ].filter(Boolean).join(" ");
   }
 
   return String(phone ?? "");
@@ -232,9 +237,12 @@ function formatPhone(phone) {
   if (phone && typeof phone === "object") {
     const raw = String(phone.raw ?? "").trim();
     const normalized = String(phone.normalized ?? "").trim();
-    return raw && normalized && raw !== normalized
+    const number = raw && normalized && raw !== normalized
       ? `${raw} → ${normalized}`
       : normalized || raw;
+    const details = [phone.source, phone.context].filter(Boolean).join(" — ");
+
+    return details ? `${number} — ${details}` : number;
   }
 
   return String(phone ?? "");

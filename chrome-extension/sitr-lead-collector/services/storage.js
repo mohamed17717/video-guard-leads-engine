@@ -61,6 +61,69 @@ function phoneIdentity(value) {
   return normalizePhoneNumber(candidate).normalized;
 }
 
+const PHONE_SOURCE_PRIORITY = {
+  "tel-link": 6,
+  "whatsapp-link": 5,
+  "meta-tag": 4,
+  "button-text": 3,
+  "anchor-text": 2,
+  "visible-text": 1
+};
+
+function mergePhoneMetadata(existingValue, incomingValue) {
+  const existingPhone =
+    existingValue && typeof existingValue === "object"
+      ? existingValue
+      : normalizePhoneNumber(existingValue);
+  const incomingPhone =
+    incomingValue && typeof incomingValue === "object"
+      ? incomingValue
+      : normalizePhoneNumber(incomingValue);
+  const existingPriority =
+    PHONE_SOURCE_PRIORITY[existingPhone?.source] ?? 0;
+  const incomingPriority =
+    PHONE_SOURCE_PRIORITY[incomingPhone?.source] ?? 0;
+  const preferred =
+    incomingPriority > existingPriority ? incomingPhone : existingPhone;
+  const fallback =
+    preferred === existingPhone ? incomingPhone : existingPhone;
+
+  return {
+    ...preferred,
+    ...(preferred.context || !fallback.context
+      ? {}
+      : { context: fallback.context }),
+    ...(preferred.source || !fallback.source
+      ? {}
+      : { source: fallback.source })
+  };
+}
+
+function mergePhoneLists(existingValues, incomingValues) {
+  const uniqueValues = new Map();
+
+  for (const value of [
+    ...cloneList(existingValues),
+    ...cloneList(incomingValues)
+  ]) {
+    const identity = phoneIdentity(value);
+
+    if (!identity) {
+      continue;
+    }
+
+    const existingValue = uniqueValues.get(identity);
+    uniqueValues.set(
+      identity,
+      existingValue
+        ? mergePhoneMetadata(existingValue, value)
+        : value
+    );
+  }
+
+  return Array.from(uniqueValues.values());
+}
+
 function socialLinkIdentity(value) {
   if (!value || typeof value !== "object") {
     return "";
@@ -167,15 +230,13 @@ export function mergeLeadRecords(
       incomingLead?.capturedAt
     ),
     lastUpdatedAt,
-    phones: mergeUnique(
+    phones: mergePhoneLists(
       existingLead?.phones,
-      incomingLead?.phones,
-      phoneIdentity
+      incomingLead?.phones
     ),
-    whatsapp: mergeUnique(
+    whatsapp: mergePhoneLists(
       existingLead?.whatsapp,
-      incomingLead?.whatsapp,
-      phoneIdentity
+      incomingLead?.whatsapp
     ),
     emails: mergeUnique(
       existingLead?.emails,

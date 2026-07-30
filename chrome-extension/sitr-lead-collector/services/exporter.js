@@ -396,6 +396,24 @@ function addNote(notes, label, values) {
   }
 }
 
+function formatPhoneProvenance(phone) {
+  if (!phone || typeof phone !== "object") {
+    return "";
+  }
+
+  const number = formatExportPhone(phone);
+  const source = String(phone.source ?? "").trim();
+  const context = String(phone.context ?? "").trim();
+  const details = [
+    source ? `source=${source}` : "",
+    context ? `context=${context}` : ""
+  ].filter(Boolean);
+
+  return number && details.length
+    ? `${number} (${details.join(", ")})`
+    : "";
+}
+
 export function mapLeadToCsvRow(lead) {
   const domain = getLeadDomain(lead);
   const phones = (lead?.phones ?? []).map(formatExportPhone).filter(Boolean);
@@ -460,6 +478,16 @@ export function mapLeadToCsvRow(lead) {
 
   addNote(notes, "other phones", phones.slice(1));
   addNote(notes, "other WhatsApp", whatsappNumbers.slice(1));
+  addNote(
+    notes,
+    "phone details",
+    (lead?.phones ?? []).map(formatPhoneProvenance)
+  );
+  addNote(
+    notes,
+    "WhatsApp details",
+    (lead?.whatsapp ?? []).map(formatPhoneProvenance)
+  );
   addNote(notes, "other emails", emails.slice(1));
   addNote(notes, "other socials", otherSocials);
   addNote(

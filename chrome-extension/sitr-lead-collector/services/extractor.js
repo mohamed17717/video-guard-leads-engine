@@ -1,17 +1,28 @@
 const PHONE_CANDIDATE_PATTERN =
-  /(?:\+|00)?\d(?:[ \t\u00a0().-]*\d){6,18}/g;
+  /(?:\+|00)?[0-9\u0660-\u0669\u06f0-\u06f9](?:[ \t\u00a0().-]*[0-9\u0660-\u0669\u06f0-\u06f9]){6,18}/gu;
 
 const EMAIL_PATTERN =
   /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]{0,61}[a-z0-9])?\.(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})/gi;
 
 const PHONE_CUE_PATTERN =
-  /\b(?:call|contact|mobile|mob|phone|tel|telephone|whats[\s-]*app|wa)\b|(?:اتصل|تليفون|هاتف|موبايل|واتس\s*اب)/i;
+  /\b(?:call|contact|mobile|mob|phone|tel|telephone|whats[\s-]*app|wa)\b|(?:اتصل|اتصال|تواصل|للتواصل|تليفون|تلفون|هاتف|موبايل|جوال|واتس\s*اب)/i;
 
 const NON_PHONE_CUE_PATTERN =
-  /\b(?:account|customer|invoice|item|order|product|reference|ref|sku|tracking|user)\s*(?:id|no|number|#)?\b/i;
+  /\b(?:(?:account|customer|invoice|item|order|product|reference|ref|sku|tracking|user)\s*(?:id|no|number|#)?|(?:facebook|fb|page|profile)\s*(?:id|number|#)|(?:view|views|watch|watches|followers?)\s*(?:count|number)?|(?:unix\s*)?(?:timestamp|epoch)|postal\s*(?:code|number)?|post\s*code|zip\s*(?:code|number)?)\b|(?:رقم\s*(?:الطلب|المنتج|الفاتورة|الحساب|العميل|التتبع|المرجع|المستخدم|الصفحة)|معرف\s*(?:فيسبوك|الحساب|العميل|المستخدم|الصفحة)|كود\s*(?:المنتج|الطلب|البريد)|مشاهدات|مشاهدة|عدد\s*(?:المشاهدات|المتابعين)|طابع\s*زمني|توقيت\s*يونكس|الرمز\s*البريدي)/i;
 
 const PRICE_CUE_PATTERN =
-  /(?:[$€£¥]|(?:\b(?:aed|egp|eur|gbp|price|sar|usd)\b)|(?:جنيه|ريال|السعر))/i;
+  /(?:[$€£¥]|(?:\b(?:aed|egp|eur|gbp|price|sar|usd)\b)|(?:جنيه|ريال|السعر|ثمن|التكلفة))/i;
+
+const PHONE_CONTEXT_MAX_LENGTH = 180;
+
+const PHONE_SOURCE_PRIORITY = {
+  "tel-link": 6,
+  "whatsapp-link": 5,
+  "meta-tag": 4,
+  "button-text": 3,
+  "anchor-text": 2,
+  "visible-text": 1
+};
 
 const COMMON_CONTACT_SELECTOR = [
   "address",
@@ -113,6 +124,16 @@ function getVisiblePageText(documentRoot) {
   return getElementText(documentRoot?.body);
 }
 
+function normalizeUnicodeDigits(value) {
+  return String(value ?? "")
+    .replace(/[\u0660-\u0669]/g, (digit) =>
+      String(digit.charCodeAt(0) - 0x0660)
+    )
+    .replace(/[\u06f0-\u06f9]/g, (digit) =>
+      String(digit.charCodeAt(0) - 0x06f0)
+    );
+}
+
 function cleanPhoneValue(value) {
   let decodedValue = String(value ?? "");
 
@@ -128,12 +149,15 @@ function cleanPhoneValue(value) {
     .replace(/[\u200e\u200f\u202a-\u202e]/g, "")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+/g, " ")
-    .replace(/^[^\d+]+|[^\d)]+$/g, "")
+    .replace(
+      /^[^0-9\u0660-\u0669\u06f0-\u06f9+]+|[^0-9\u0660-\u0669\u06f0-\u06f9)]+$/gu,
+      ""
+    )
     .trim();
 }
 
 function phoneKey(value) {
-  let digits = String(value ?? "").replace(/\D/g, "");
+  let digits = normalizeUnicodeDigits(value).replace(/\D/g, "");
 
   if (digits.startsWith("00")) {
     digits = digits.slice(2);
@@ -142,19 +166,101 @@ function phoneKey(value) {
   return digits;
 }
 
-function uniquePhoneValues(values) {
+function cleanPhoneContext(value) {
+  const context = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s,;:|–—-]+|[\s,;:|–—-]+$/g, "")
+    .trim();
+
+  if (context.length <= PHONE_CONTEXT_MAX_LENGTH) {
+    return context;
+  }
+
+  return `${context.slice(0, PHONE_CONTEXT_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+function createPhoneContext(input, start, end, fallback = "") {
+  const text = String(input ?? "");
+
+  if (!text || start < 0 || end < start) {
+    return cleanPhoneContext(fallback);
+  }
+
+  const lineStart = Math.max(
+    text.lastIndexOf("\n", start - 1) + 1,
+    text.lastIndexOf("\r", start - 1) + 1,
+    start - Math.floor(PHONE_CONTEXT_MAX_LENGTH / 2)
+  );
+  const lineBreakIndexes = [
+    text.indexOf("\n", end),
+    text.indexOf("\r", end)
+  ].filter((index) => index !== -1);
+  const nearestLineEnd = lineBreakIndexes.length
+    ? Math.min(...lineBreakIndexes)
+    : text.length;
+  const lineEnd = Math.min(
+    nearestLineEnd,
+    end + Math.floor(PHONE_CONTEXT_MAX_LENGTH / 2)
+  );
+  const before = text.slice(lineStart, start);
+  const after = text.slice(end, lineEnd);
+
+  return cleanPhoneContext(`${before} ${after}`) ||
+    cleanPhoneContext(fallback);
+}
+
+function createPhoneCandidate(raw, context, source) {
+  const cleanedValue = cleanPhoneValue(raw);
+
+  if (!phoneKey(cleanedValue)) {
+    return null;
+  }
+
+  return {
+    raw: cleanedValue,
+    context: cleanPhoneContext(context),
+    source
+  };
+}
+
+function phoneCandidatePriority(candidate) {
+  return PHONE_SOURCE_PRIORITY[candidate?.source] ?? 0;
+}
+
+function uniquePhoneCandidates(values) {
   const uniqueValues = new Map();
 
-  for (const value of values) {
-    const cleanedValue = cleanPhoneValue(value);
-    const key = phoneKey(cleanedValue);
+  for (const value of values ?? []) {
+    const candidate =
+      value && typeof value === "object"
+        ? createPhoneCandidate(
+            value.raw ?? value.value ?? value.normalized,
+            value.context,
+            value.source
+          )
+        : createPhoneCandidate(value, "", "visible-text");
 
-    if (key && !uniqueValues.has(key)) {
-      uniqueValues.set(key, cleanedValue);
+    if (!candidate) {
+      continue;
+    }
+
+    const key = phoneKey(candidate.raw);
+    const existing = uniqueValues.get(key);
+
+    if (
+      !existing ||
+      phoneCandidatePriority(candidate) > phoneCandidatePriority(existing) ||
+      (!existing.context && candidate.context)
+    ) {
+      uniqueValues.set(key, candidate);
     }
   }
 
   return Array.from(uniqueValues.values());
+}
+
+function uniquePhoneValues(values) {
+  return uniquePhoneCandidates(values).map(({ raw }) => raw);
 }
 
 function isValidCalendarDate(year, month, day) {
@@ -196,14 +302,15 @@ function groupsContainCalendarDate(groups) {
 }
 
 function looksLikeDate(value, digits) {
-  const numericGroups = value.match(/\d+/g) ?? [];
+  const asciiValue = normalizeUnicodeDigits(value);
+  const numericGroups = asciiValue.match(/\d+/g) ?? [];
 
   if (groupsContainCalendarDate(numericGroups)) {
     return true;
   }
 
   if (
-    /^(?:19|20)\d{2}[ \t.-]+(?:19|20)\d{2}$/.test(value.trim())
+    /^(?:19|20)\d{2}[ \t.-]+(?:19|20)\d{2}$/.test(asciiValue.trim())
   ) {
     return true;
   }
@@ -286,7 +393,14 @@ function isLikelyPhoneNumber(value, context = "", explicit = false) {
   return /[ ()-]/.test(cleanedValue);
 }
 
-function extractPhoneMatches(text, { explicit = false } = {}) {
+function extractPhoneMatches(
+  text,
+  {
+    explicit = false,
+    source = "visible-text",
+    context: contextOverride = ""
+  } = {}
+) {
   const input = String(text ?? "");
   const matches = [];
 
@@ -294,16 +408,18 @@ function extractPhoneMatches(text, { explicit = false } = {}) {
     const value = cleanPhoneValue(match[0]);
     const start = match.index ?? 0;
     const end = start + match[0].length;
-    const lineStart = input.lastIndexOf("\n", start - 1) + 1;
-    const nextLineBreak = input.indexOf("\n", end);
-    const lineEnd = nextLineBreak === -1 ? input.length : nextLineBreak;
-    const context = input.slice(
-      Math.max(lineStart, start - 36),
-      Math.min(lineEnd, end + 36)
-    );
+    const context =
+      cleanPhoneContext(contextOverride) ||
+      createPhoneContext(input, start, end);
 
     if (isLikelyPhoneNumber(value, context, explicit)) {
-      matches.push({ value, start, end });
+      matches.push({
+        value,
+        start,
+        end,
+        context,
+        source
+      });
     }
   }
 
@@ -313,6 +429,16 @@ function extractPhoneMatches(text, { explicit = false } = {}) {
 export function extractPhonesFromText(text, options = {}) {
   return uniquePhoneValues(
     extractPhoneMatches(text, options).map(({ value }) => value)
+  );
+}
+
+export function extractPhoneCandidatesFromText(text, options = {}) {
+  return uniquePhoneCandidates(
+    extractPhoneMatches(text, options).map(({ value, context, source }) => ({
+      raw: value,
+      context,
+      source
+    }))
   );
 }
 
@@ -410,20 +536,102 @@ function collectContactTextSources(documentRoot) {
   return sources.filter(Boolean);
 }
 
+function getElementContext(element) {
+  const values = [
+    getElementText(element),
+    getAttribute(element, "aria-label"),
+    getAttribute(element, "title")
+  ];
+  const uniqueValues = Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean))
+  );
+  const withoutNumbers = uniqueValues
+    .join(" ")
+    .replace(PHONE_CANDIDATE_PATTERN, " ");
+
+  return cleanPhoneContext(withoutNumbers);
+}
+
 export function extractPhoneNumbers(documentRoot) {
-  const values = collectContactTextSources(documentRoot).flatMap((text) =>
-    extractPhonesFromText(text)
+  const candidates = [];
+
+  candidates.push(
+    ...extractPhoneCandidatesFromText(getVisiblePageText(documentRoot), {
+      source: "visible-text"
+    })
   );
 
   for (const anchor of safeQueryAll(documentRoot, "a[href]")) {
     const href = getAttribute(anchor, "href").trim();
+    const anchorText = getElementText(anchor);
 
     if (href.toLowerCase().startsWith("tel:")) {
-      values.push(...extractPhonesFromText(href.slice(4), { explicit: true }));
+      candidates.push(
+        ...extractPhoneCandidatesFromText(href.slice(4), {
+          explicit: true,
+          source: "tel-link",
+          context: getElementContext(anchor)
+        })
+      );
+    }
+
+    if (anchorText) {
+      candidates.push(
+        ...extractPhoneCandidatesFromText(anchorText, {
+          source: "anchor-text"
+        })
+      );
     }
   }
 
-  return uniquePhoneValues(values);
+  for (const button of safeQueryAll(
+    documentRoot,
+    "button, [role='button']"
+  )) {
+    candidates.push(
+      ...extractPhoneCandidatesFromText(getElementText(button), {
+        source: "button-text"
+      })
+    );
+  }
+
+  for (const section of safeQueryAll(
+    documentRoot,
+    COMMON_CONTACT_SELECTOR
+  )) {
+    candidates.push(
+      ...extractPhoneCandidatesFromText(getElementText(section), {
+        source: "visible-text"
+      })
+    );
+  }
+
+  for (const meta of safeQueryAll(documentRoot, "meta[content]")) {
+    const descriptor = [
+      getAttribute(meta, "name"),
+      getAttribute(meta, "property"),
+      getAttribute(meta, "itemprop")
+    ].join(" ");
+    const content = getAttribute(meta, "content");
+
+    if (
+      !RELEVANT_META_PATTERN.test(descriptor) &&
+      !PHONE_CUE_PATTERN.test(content)
+    ) {
+      continue;
+    }
+
+    for (const candidate of extractPhoneCandidatesFromText(content, {
+      source: "meta-tag"
+    })) {
+      candidates.push({
+        ...candidate,
+        context: cleanPhoneContext(`${descriptor} ${candidate.context}`)
+      });
+    }
+  }
+
+  return uniquePhoneCandidates(candidates);
 }
 
 export function extractEmailAddresses(documentRoot) {
@@ -643,11 +851,11 @@ function parseWidgetSettings(value, baseUrl) {
   }
 }
 
-export function extractWhatsappWidgetNumbers(
+function extractWhatsappWidgetCandidates(
   documentRoot,
   baseUrl = undefined
 ) {
-  const phones = [];
+  const candidates = [];
 
   for (const element of safeQueryAll(
     documentRoot,
@@ -669,6 +877,8 @@ export function extractWhatsappWidgetNumbers(
       continue;
     }
 
+    const phones = [];
+
     for (const attributeName of attributeNames) {
       const attributeValue = getAttribute(element, attributeName);
 
@@ -689,14 +899,34 @@ export function extractWhatsappWidgetNumbers(
         )
       );
     }
+
+    const context =
+      getElementContext(element) || "WhatsApp contact button";
+
+    candidates.push(
+      ...phones.map((raw) => ({
+        raw,
+        context,
+        source: "whatsapp-link"
+      }))
+    );
   }
 
-  return uniquePhoneValues(phones);
+  return uniquePhoneCandidates(candidates);
+}
+
+export function extractWhatsappWidgetNumbers(
+  documentRoot,
+  baseUrl = undefined
+) {
+  return extractWhatsappWidgetCandidates(documentRoot, baseUrl).map(
+    ({ raw }) => raw
+  );
 }
 
 function extractWhatsappNumbersNearMentions(text) {
   const input = String(text ?? "");
-  const values = [];
+  const candidates = [];
   const mentionPattern = /whats[\s-]*app|واتس\s*اب/gi;
 
   for (const match of input.matchAll(mentionPattern)) {
@@ -705,17 +935,23 @@ function extractWhatsappNumbersNearMentions(text) {
       Math.max(0, start - 90),
       start + match[0].length + 90
     );
-    values.push(...extractPhonesFromText(nearbyText));
+    candidates.push(
+      ...extractPhoneCandidatesFromText(nearbyText, {
+        source: "visible-text"
+      })
+    );
   }
 
-  return values;
+  return uniquePhoneCandidates(candidates);
 }
 
 export function extractWhatsappInfo(documentRoot, baseUrl = undefined) {
   const links = [];
-  const phones = [];
+  const candidates = [];
 
-  for (const href of getAnchorUrls(documentRoot)) {
+  for (const anchor of safeQueryAll(documentRoot, "a[href]")) {
+    const href = getAttribute(anchor, "href").trim();
+
     if (classifySocialUrl(href, baseUrl) !== "whatsapp") {
       continue;
     }
@@ -728,20 +964,24 @@ export function extractWhatsappInfo(documentRoot, baseUrl = undefined) {
     }
 
     if (phone) {
-      phones.push(phone);
+      candidates.push({
+        raw: phone,
+        context: getElementContext(anchor) || "WhatsApp contact link",
+        source: "whatsapp-link"
+      });
     }
   }
 
-  phones.push(
+  candidates.push(
     ...extractWhatsappNumbersNearMentions(getVisiblePageText(documentRoot))
   );
-  phones.push(
-    ...extractWhatsappWidgetNumbers(documentRoot, baseUrl)
+  candidates.push(
+    ...extractWhatsappWidgetCandidates(documentRoot, baseUrl)
   );
 
   return {
     links: Array.from(new Set(links)),
-    phones: uniquePhoneValues(phones)
+    phones: uniquePhoneCandidates(candidates)
   };
 }
 
@@ -851,7 +1091,7 @@ export function extractPageData(documentRoot = globalThis.document, options = {}
     documentRoot,
     metadata.sourceUrl
   );
-  const phones = uniquePhoneValues([
+  const phones = uniquePhoneCandidates([
     ...extractPhoneNumbers(documentRoot),
     ...whatsappInfo.phones
   ]);

@@ -37,8 +37,27 @@ const TRACKING_PARAMETERS = new Set([
   "wbraid"
 ]);
 
+const PHONE_SOURCE_PRIORITY = {
+  "tel-link": 6,
+  "whatsapp-link": 5,
+  "meta-tag": 4,
+  "button-text": 3,
+  "anchor-text": 2,
+  "visible-text": 1
+};
+
+function normalizeUnicodeDigits(value) {
+  return String(value ?? "")
+    .replace(/[\u0660-\u0669]/g, (digit) =>
+      String(digit.charCodeAt(0) - 0x0660)
+    )
+    .replace(/[\u06f0-\u06f9]/g, (digit) =>
+      String(digit.charCodeAt(0) - 0x06f0)
+    );
+}
+
 function removePhoneDecorations(value) {
-  let cleanedValue = String(value ?? "").trim();
+  let cleanedValue = normalizeUnicodeDigits(value).trim();
 
   try {
     cleanedValue = decodeURIComponent(cleanedValue);
@@ -74,18 +93,40 @@ function isEgyptianInternationalDigits(digits) {
 }
 
 export function normalizePhoneNumber(value) {
-  const raw = String(value ?? "").trim();
+  const inputIsObject = value && typeof value === "object";
+  const raw = String(
+    inputIsObject
+      ? value.raw ?? value.value ?? value.normalized ?? ""
+      : value ?? ""
+  ).trim();
   const cleanedValue = removePhoneDecorations(raw);
   const digits = cleanedValue.replace(/\D/g, "");
   let normalized = "";
+  const context = inputIsObject
+    ? String(value.context ?? "").replace(/\s+/g, " ").trim().slice(0, 200)
+    : "";
+  const source = inputIsObject
+    ? String(value.source ?? "").trim()
+    : "";
 
   if (!digits) {
-    return { raw, normalized };
+    return {
+      raw,
+      normalized,
+      ...(context ? { context } : {}),
+      ...(source ? { source } : {})
+    };
   }
 
   if (isEgyptianNationalNumber(digits)) {
     normalized = `+20${digits.slice(1)}`;
   } else if (isEgyptianInternationalDigits(digits)) {
+    normalized = `+${digits}`;
+  } else if (
+    source === "whatsapp-link" &&
+    !digits.startsWith("0") &&
+    digits.length >= 8
+  ) {
     normalized = `+${digits}`;
   } else if (cleanedValue.startsWith("00") && digits.length > 2) {
     normalized = `+${digits.slice(2)}`;
@@ -95,7 +136,28 @@ export function normalizePhoneNumber(value) {
     normalized = digits;
   }
 
-  return { raw, normalized };
+  return {
+    raw,
+    normalized,
+    ...(context ? { context } : {}),
+    ...(source ? { source } : {})
+  };
+}
+
+function choosePhoneMetadata(existingPhone, incomingPhone) {
+  const existingPriority =
+    PHONE_SOURCE_PRIORITY[existingPhone?.source] ?? 0;
+  const incomingPriority =
+    PHONE_SOURCE_PRIORITY[incomingPhone?.source] ?? 0;
+
+  if (
+    incomingPriority > existingPriority ||
+    (!existingPhone?.context && incomingPhone?.context)
+  ) {
+    return incomingPhone;
+  }
+
+  return existingPhone;
 }
 
 export function normalizePhoneNumbers(values) {
@@ -104,9 +166,17 @@ export function normalizePhoneNumbers(values) {
   for (const value of values ?? []) {
     const phone = normalizePhoneNumber(value);
 
-    if (phone.normalized && !uniqueNumbers.has(phone.normalized)) {
-      uniqueNumbers.set(phone.normalized, phone);
+    if (!phone.normalized) {
+      continue;
     }
+
+    const existingPhone = uniqueNumbers.get(phone.normalized);
+    uniqueNumbers.set(
+      phone.normalized,
+      existingPhone
+        ? choosePhoneMetadata(existingPhone, phone)
+        : phone
+    );
   }
 
   return Array.from(uniqueNumbers.values());

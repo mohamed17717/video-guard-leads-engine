@@ -91,10 +91,12 @@ function renderPhoneList(selector, phones) {
 
   for (const phone of phones) {
     const item = document.createElement("li");
-    item.textContent =
+    const number =
       phone.raw && phone.raw !== phone.normalized
         ? `${phone.raw} → ${phone.normalized}`
         : phone.normalized;
+    const details = [phone.source, phone.context].filter(Boolean).join(" — ");
+    item.textContent = details ? `${number}\n${details}` : number;
     list.append(item);
   }
 }
