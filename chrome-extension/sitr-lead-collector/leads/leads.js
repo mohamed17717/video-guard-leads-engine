@@ -50,6 +50,7 @@ function createSearchText(lead) {
     lead.sourceUrl,
     ...(lead.phones ?? []).map(getPhoneText),
     ...(lead.whatsapp ?? []).map(getPhoneText),
+    ...(lead.emails ?? []),
     ...(lead.socialLinks ?? []).map(getSocialText),
     ...(lead.externalLinks ?? [])
   ]
@@ -78,6 +79,10 @@ function renderSummary() {
     (total, lead) => total + (lead.whatsapp?.length ?? 0),
     0
   );
+  const emailCount = allLeads.reduce(
+    (total, lead) => total + (lead.emails?.length ?? 0),
+    0
+  );
   const socialCount = allLeads.reduce(
     (total, lead) => total + (lead.socialLinks?.length ?? 0),
     0
@@ -103,6 +108,13 @@ function renderSummary() {
     whatsappCount,
     "WhatsApp Number",
     "WhatsApp Numbers"
+  );
+  setSummaryValue(
+    "#total-emails",
+    "#total-emails-label",
+    emailCount,
+    "Email Address",
+    "Email Addresses"
   );
   setSummaryValue(
     "#total-social",
@@ -194,6 +206,7 @@ function createLeadCard(lead) {
   counts.append(
     createCountChip("phones", lead.phones?.length ?? 0),
     createCountChip("WhatsApp", lead.whatsapp?.length ?? 0),
+    createCountChip("emails", lead.emails?.length ?? 0),
     createCountChip("social", lead.socialLinks?.length ?? 0),
     createCountChip("external", lead.externalLinks?.length ?? 0)
   );
@@ -277,6 +290,7 @@ function renderLeadDetails(container, lead) {
   container.append(
     createDetailSection("Phones", lead.phones, formatPhone),
     createDetailSection("WhatsApp", lead.whatsapp, formatPhone),
+    createDetailSection("Emails", lead.emails, (email) => email),
     createDetailSection(
       "Social Links",
       lead.socialLinks,

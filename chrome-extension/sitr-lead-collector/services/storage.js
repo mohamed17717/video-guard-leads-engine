@@ -1,4 +1,8 @@
-import { normalizePhoneNumber, normalizeUrl } from "./normalizer.js";
+import {
+  normalizeEmail,
+  normalizePhoneNumber,
+  normalizeUrl
+} from "./normalizer.js";
 
 export const STORAGE_KEY = "leads";
 
@@ -23,6 +27,7 @@ function createLeadId() {
 function createLeadRecord(lead, id = createLeadId()) {
   const capturedAt =
     String(lead?.capturedAt ?? "").trim() || new Date().toISOString();
+  const socialLinks = cloneList(lead?.socialLinks);
   const record = {
     id,
     pageTitle: String(lead?.pageTitle ?? "").trim(),
@@ -31,8 +36,12 @@ function createLeadRecord(lead, id = createLeadId()) {
     capturedAt,
     phones: cloneList(lead?.phones),
     whatsapp: cloneList(lead?.whatsapp),
-    socialLinks: cloneList(lead?.socialLinks),
-    externalLinks: cloneList(lead?.externalLinks)
+    emails: cloneList(lead?.emails),
+    socialLinks,
+    externalLinks: removeSocialUrlsFromExternal(
+      socialLinks,
+      lead?.externalLinks
+    )
   };
   const lastUpdatedAt = String(lead?.lastUpdatedAt ?? "").trim();
 
@@ -66,8 +75,31 @@ function socialLinkIdentity(value) {
   return platform && url ? `${platform}:${url}` : "";
 }
 
+function socialUrlIdentity(value) {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const rawUrl = String(value.url ?? "").trim();
+  return /^whatsapp:/i.test(rawUrl) ? rawUrl : normalizeUrl(rawUrl);
+}
+
 function externalLinkIdentity(value) {
   return normalizeUrl(value) || String(value ?? "").trim();
+}
+
+function emailIdentity(value) {
+  return normalizeEmail(value).toLowerCase();
+}
+
+function removeSocialUrlsFromExternal(socialLinks, externalLinks) {
+  const socialUrls = new Set(
+    cloneList(socialLinks).map(socialUrlIdentity).filter(Boolean)
+  );
+
+  return cloneList(externalLinks).filter(
+    (url) => !socialUrls.has(externalLinkIdentity(url))
+  );
 }
 
 function mergeUnique(existingValues, incomingValues, getIdentity) {
@@ -105,6 +137,20 @@ export function mergeLeadRecords(
   incomingLead,
   { lastUpdatedAt = new Date().toISOString() } = {}
 ) {
+  const socialLinks = mergeUnique(
+    existingLead?.socialLinks,
+    incomingLead?.socialLinks,
+    socialLinkIdentity
+  );
+  const externalLinks = removeSocialUrlsFromExternal(
+    socialLinks,
+    mergeUnique(
+      existingLead?.externalLinks,
+      incomingLead?.externalLinks,
+      externalLinkIdentity
+    )
+  );
+
   return {
     id: existingLead.id,
     pageTitle:
@@ -131,16 +177,13 @@ export function mergeLeadRecords(
       incomingLead?.whatsapp,
       phoneIdentity
     ),
-    socialLinks: mergeUnique(
-      existingLead?.socialLinks,
-      incomingLead?.socialLinks,
-      socialLinkIdentity
+    emails: mergeUnique(
+      existingLead?.emails,
+      incomingLead?.emails,
+      emailIdentity
     ),
-    externalLinks: mergeUnique(
-      existingLead?.externalLinks,
-      incomingLead?.externalLinks,
-      externalLinkIdentity
-    )
+    socialLinks,
+    externalLinks
   };
 }
 
@@ -150,7 +193,16 @@ async function writeLeads(leads) {
 
 export async function getAllLeads() {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+  const leads = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+
+  return leads.map((lead) => ({
+    ...lead,
+    emails: cloneList(lead?.emails),
+    externalLinks: removeSocialUrlsFromExternal(
+      lead?.socialLinks,
+      lead?.externalLinks
+    )
+  }));
 }
 
 export async function getLeadCount() {

@@ -39,6 +39,7 @@ function lead(overrides = {}) {
     capturedAt: "2026-07-30T10:00:00.000Z",
     phones: [],
     whatsapp: [],
+    emails: [],
     socialLinks: [],
     externalLinks: [],
     ...overrides
@@ -73,6 +74,28 @@ test("returns a duplicate result without writing a second lead", async () => {
   assert.equal((await getAllLeads())[0].pageTitle, "Example Academy");
 });
 
+test("suppresses stored social URLs from external links", async () => {
+  installStorage([
+    lead({
+      id: "legacy-lead",
+      socialLinks: [
+        {
+          platform: "instagram",
+          url: "https://instagram.com/example"
+        }
+      ],
+      externalLinks: [
+        "https://instagram.com/example/",
+        "https://partner.test"
+      ]
+    })
+  ]);
+
+  assert.deepEqual((await getAllLeads())[0].externalLinks, [
+    "https://partner.test"
+  ]);
+});
+
 test("replaces a duplicate while preserving its stable ID", async () => {
   installStorage();
   const firstResult = await addLead(lead());
@@ -101,13 +124,17 @@ test("merges duplicate values and keeps the oldest capture time", () => {
           normalized: "+201012345678"
         }
       ],
+      emails: ["hello@example.com"],
       socialLinks: [
         {
           platform: "instagram",
           url: "https://instagram.com/example"
         }
       ],
-      externalLinks: ["https://partner.test"]
+      externalLinks: [
+        "https://instagram.com/example/",
+        "https://partner.test"
+      ]
     }),
     lead({
       pageTitle: "Updated Academy",
@@ -122,6 +149,7 @@ test("merges duplicate values and keeps the oldest capture time", () => {
           normalized: "+966501234567"
         }
       ],
+      emails: ["HELLO@example.com", "sales@example.com"],
       socialLinks: [
         {
           platform: "instagram",
@@ -133,6 +161,7 @@ test("merges duplicate values and keeps the oldest capture time", () => {
         }
       ],
       externalLinks: [
+        "https://linkedin.com/company/example",
         "https://partner.test/",
         "https://another-partner.test/"
       ]
@@ -145,6 +174,10 @@ test("merges duplicate values and keeps the oldest capture time", () => {
   assert.equal(merged.capturedAt, "2026-07-29T10:00:00.000Z");
   assert.equal(merged.lastUpdatedAt, "2026-07-30T12:00:00.000Z");
   assert.equal(merged.phones.length, 2);
+  assert.deepEqual(merged.emails, [
+    "hello@example.com",
+    "sales@example.com"
+  ]);
   assert.equal(merged.socialLinks.length, 2);
   assert.deepEqual(merged.externalLinks, [
     "https://partner.test",

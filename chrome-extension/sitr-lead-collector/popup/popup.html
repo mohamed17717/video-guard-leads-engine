@@ -47,6 +47,10 @@
             <dd id="preview-whatsapp-count">0</dd>
           </div>
           <div>
+            <dt>Emails</dt>
+            <dd id="preview-email-count">0</dd>
+          </div>
+          <div>
             <dt>Social Links</dt>
             <dd id="preview-social-count">0</dd>
           </div>
@@ -75,6 +79,14 @@
 
           <details>
             <summary>
+              Emails
+              <span id="email-section-count" class="count-badge">0</span>
+            </summary>
+            <ul id="preview-emails" class="value-list"></ul>
+          </details>
+
+          <details>
+            <summary>
               Social Links
               <span id="social-section-count" class="count-badge">0</span>
             </summary>
@@ -89,6 +101,43 @@
             <ul id="preview-external" class="value-list"></ul>
           </details>
         </div>
+
+        <section class="manual-contact" aria-labelledby="manual-contact-title">
+          <div>
+            <p class="eyebrow">Missing a number?</p>
+            <h3 id="manual-contact-title">Add contact manually</h3>
+          </div>
+
+          <div class="manual-contact__row">
+            <label for="manual-phone">Phone number</label>
+            <div class="manual-contact__control">
+              <input
+                id="manual-phone"
+                type="tel"
+                placeholder="010 1234 5678"
+                autocomplete="tel"
+              >
+              <button id="add-manual-phone" class="button button--secondary" type="button">
+                Add Phone
+              </button>
+            </div>
+          </div>
+
+          <div class="manual-contact__row">
+            <label for="manual-whatsapp">WhatsApp number</label>
+            <div class="manual-contact__control">
+              <input
+                id="manual-whatsapp"
+                type="tel"
+                placeholder="+20 10 1234 5678"
+                autocomplete="tel"
+              >
+              <button id="add-manual-whatsapp" class="button button--secondary" type="button">
+                Add WhatsApp
+              </button>
+            </div>
+          </div>
+        </section>
 
         <div id="duplicate-warning" class="duplicate-warning" role="alert" hidden>
           <strong>This page was captured before.</strong>

@@ -28,6 +28,7 @@ test("formats a lead as readable plain text", () => {
         normalized: "+201112345678"
       }
     ],
+    emails: ["hello@example.com"],
     socialLinks: [
       {
         platform: "instagram",
@@ -49,6 +50,9 @@ test("formats a lead as readable plain text", () => {
       "",
       "WhatsApp",
       "- +201112345678",
+      "",
+      "Emails",
+      "- hello@example.com",
       "",
       "Social Links",
       "- instagram: https://instagram.com/example",
@@ -82,6 +86,7 @@ test("formats the complete TXT collection with separators and Arabic text", () =
           }
         ],
         whatsapp: ["https://wa.me/201012345678"],
+        emails: ["hello@example.com"],
         socialLinks: [
           {
             platform: "youtube",
@@ -100,6 +105,7 @@ test("formats the complete TXT collection with separators and Arabic text", () =
   assert.match(text, /LEAD 1/);
   assert.match(text, /Page Title:\nأكاديمية أحمد/);
   assert.match(text, /Phone Numbers:\n- \+201012345678/);
+  assert.match(text, /Emails:\n- hello@example.com/);
   assert.match(
     text,
     /Social Links:\n- YouTube: https:\/\/youtube.com\/@ahmedacademy/
@@ -129,6 +135,7 @@ test("pretty-prints JSON while preserving raw values and Arabic content", () => 
         capturedAt: "2026-07-30T03:20:00Z",
         phones: [rawPhone],
         whatsapp: [],
+        emails: ["hello@example.com"],
         socialLinks: [],
         externalLinks: []
       }
@@ -142,6 +149,7 @@ test("pretty-prints JSON while preserving raw values and Arabic content", () => 
   assert.equal(parsed.exportedAt, "2026-07-30T04:00:00Z");
   assert.equal(parsed.totalLeads, 1);
   assert.deepEqual(parsed.leads[0].phones[0], rawPhone);
+  assert.deepEqual(parsed.leads[0].emails, ["hello@example.com"]);
 });
 
 test("creates the requested UTC JSON filename", () => {

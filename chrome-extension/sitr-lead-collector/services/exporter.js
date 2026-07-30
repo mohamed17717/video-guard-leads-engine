@@ -44,6 +44,8 @@ export function formatLeadAsText(lead) {
     "",
     formatSection("WhatsApp", lead?.whatsapp, formatPhone),
     "",
+    formatSection("Emails", lead?.emails),
+    "",
     formatSection("Social Links", lead?.socialLinks, formatSocialLink),
     "",
     formatSection("External Links", lead?.externalLinks)
@@ -125,6 +127,8 @@ function formatExportLead(lead, index) {
     formatExportList("Phone Numbers", lead?.phones, formatExportPhone),
     "",
     formatExportList("WhatsApp", lead?.whatsapp, formatExportPhone),
+    "",
+    formatExportList("Emails", lead?.emails),
     "",
     formatExportList(
       "Social Links",

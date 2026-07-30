@@ -1,6 +1,9 @@
 const PHONE_CANDIDATE_PATTERN =
   /(?:\+|00)?\d(?:[ \t\u00a0().-]*\d){6,18}/g;
 
+const EMAIL_PATTERN =
+  /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]{0,61}[a-z0-9])?\.(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})/gi;
+
 const PHONE_CUE_PATTERN =
   /\b(?:call|contact|mobile|mob|phone|tel|telephone|whats[\s-]*app|wa)\b|(?:اتصل|تليفون|هاتف|موبايل|واتس\s*اب)/i;
 
@@ -17,12 +20,35 @@ const COMMON_CONTACT_SELECTOR = [
   "[class*='contact' i]",
   "[id*='phone' i]",
   "[class*='phone' i]",
+  "[id*='email' i]",
+  "[class*='email' i]",
   "[id*='whatsapp' i]",
   "[class*='whatsapp' i]"
 ].join(", ");
 
 const RELEVANT_META_PATTERN =
-  /(?:contact|description|mobile|phone|telephone|whats[\s-]*app)/i;
+  /(?:contact|description|email|mobile|phone|telephone|whats[\s-]*app)/i;
+
+const WHATSAPP_WIDGET_SELECTOR = [
+  "[class*='whatsapp' i]",
+  "[id*='whatsapp' i]",
+  "[class*='joinchat' i]",
+  "[id*='joinchat' i]",
+  "[aria-label*='whatsapp' i]",
+  "[data-whatsapp]",
+  "[data-wa-number]",
+  "[data-telephone][role='button']",
+  "[data-phone][role='button']",
+  "[data-settings]",
+  "[onclick*='whatsapp' i]",
+  "[onclick*='wa.me' i]"
+].join(", ");
+
+const PHONE_ATTRIBUTE_PATTERN =
+  /(?:^|[-_:])(?:telephone|phone|mobile|whatsapp|wa[-_]?number|number)(?:$|[-_:])/i;
+
+const WHATSAPP_WIDGET_SIGNAL_PATTERN =
+  /(?:whats[\s_-]*app|joinchat|wa\.me|whatsapp:\/\/)/i;
 
 const SOCIAL_DOMAINS = [
   { platform: "facebook", domains: ["facebook.com", "fb.com", "fb.me"] },
@@ -75,6 +101,14 @@ function getAttribute(element, name) {
   return element.getAttribute(name) ?? "";
 }
 
+function getAttributeNames(element) {
+  if (!element || typeof element.getAttributeNames !== "function") {
+    return [];
+  }
+
+  return element.getAttributeNames();
+}
+
 function getVisiblePageText(documentRoot) {
   return getElementText(documentRoot?.body);
 }
@@ -123,20 +157,80 @@ function uniquePhoneValues(values) {
   return Array.from(uniqueValues.values());
 }
 
+function isValidCalendarDate(year, month, day) {
+  if (
+    year < 1900 ||
+    year > 2100 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return false;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function groupsContainCalendarDate(groups) {
+  for (let index = 0; index <= groups.length - 3; index += 1) {
+    const first = Number(groups[index]);
+    const second = Number(groups[index + 1]);
+    const third = Number(groups[index + 2]);
+
+    if (
+      isValidCalendarDate(first, second, third) ||
+      isValidCalendarDate(third, second, first) ||
+      isValidCalendarDate(third, first, second)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function looksLikeDate(value, digits) {
-  const compactValue = value.replace(/[() \t]/g, "");
+  const numericGroups = value.match(/\d+/g) ?? [];
+
+  if (groupsContainCalendarDate(numericGroups)) {
+    return true;
+  }
 
   if (
-    /^(?:19|20)\d{2}[-.]\d{1,2}[-.]\d{1,2}$/.test(compactValue) ||
-    /^\d{1,2}[-.]\d{1,2}[-.](?:\d{2}|\d{4})$/.test(compactValue)
+    /^(?:19|20)\d{2}[ \t.-]+(?:19|20)\d{2}$/.test(value.trim())
   ) {
     return true;
   }
 
-  if (/^(?:19|20)\d{6}$/.test(digits)) {
-    const month = Number(digits.slice(4, 6));
-    const day = Number(digits.slice(6, 8));
-    return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+  if (digits.length === 8) {
+    const yearFirst = Number(digits.slice(0, 4));
+    const yearLast = Number(digits.slice(4, 8));
+
+    if (
+      isValidCalendarDate(
+        yearFirst,
+        Number(digits.slice(4, 6)),
+        Number(digits.slice(6, 8))
+      ) ||
+      isValidCalendarDate(
+        yearLast,
+        Number(digits.slice(2, 4)),
+        Number(digits.slice(0, 2))
+      ) ||
+      isValidCalendarDate(
+        yearLast,
+        Number(digits.slice(0, 2)),
+        Number(digits.slice(2, 4))
+      )
+    ) {
+      return true;
+    }
   }
 
   return false;
@@ -222,7 +316,61 @@ export function extractPhonesFromText(text, options = {}) {
   );
 }
 
-function collectPhoneTextSources(documentRoot) {
+function normalizeExtractedEmail(value) {
+  const email = String(value ?? "")
+    .trim()
+    .replace(/^[<("'[]+|[>)"',.;:\]]+$/g, "");
+  const separatorIndex = email.lastIndexOf("@");
+
+  if (separatorIndex <= 0) {
+    return "";
+  }
+
+  const localPart = email.slice(0, separatorIndex);
+  const domain = email.slice(separatorIndex + 1).toLowerCase();
+
+  if (
+    email.length > 254 ||
+    localPart.length > 64 ||
+    localPart.startsWith(".") ||
+    localPart.endsWith(".") ||
+    localPart.includes("..") ||
+    domain.includes("..")
+  ) {
+    return "";
+  }
+
+  return `${localPart}@${domain}`;
+}
+
+function uniqueEmailValues(values) {
+  const uniqueValues = new Map();
+
+  for (const value of values) {
+    const email = normalizeExtractedEmail(value);
+    const key = email.toLowerCase();
+
+    if (email && !uniqueValues.has(key)) {
+      uniqueValues.set(key, email);
+    }
+  }
+
+  return Array.from(uniqueValues.values());
+}
+
+function revealObfuscatedEmails(text) {
+  return String(text ?? "").replace(
+    /([a-z0-9.!#$%&'*+/=?^_`{|}~-]+)\s*(?:\[at\]|\(at\)|\bat\b)\s*([a-z0-9.-]+)\s*(?:\[dot\]|\(dot\)|\bdot\b)\s*([a-z]{2,63})/gi,
+    "$1@$2.$3"
+  );
+}
+
+export function extractEmailsFromText(text) {
+  const input = revealObfuscatedEmails(text);
+  return uniqueEmailValues(Array.from(input.matchAll(EMAIL_PATTERN), (match) => match[0]));
+}
+
+function collectContactTextSources(documentRoot) {
   const sources = [getVisiblePageText(documentRoot)];
 
   for (const anchor of safeQueryAll(documentRoot, "a[href]")) {
@@ -263,7 +411,7 @@ function collectPhoneTextSources(documentRoot) {
 }
 
 export function extractPhoneNumbers(documentRoot) {
-  const values = collectPhoneTextSources(documentRoot).flatMap((text) =>
+  const values = collectContactTextSources(documentRoot).flatMap((text) =>
     extractPhonesFromText(text)
   );
 
@@ -276,6 +424,38 @@ export function extractPhoneNumbers(documentRoot) {
   }
 
   return uniquePhoneValues(values);
+}
+
+export function extractEmailAddresses(documentRoot) {
+  const values = collectContactTextSources(documentRoot).flatMap((text) =>
+    extractEmailsFromText(text)
+  );
+
+  for (const anchor of safeQueryAll(documentRoot, "a[href]")) {
+    const href = getAttribute(anchor, "href").trim();
+
+    if (!href.toLowerCase().startsWith("mailto:")) {
+      continue;
+    }
+
+    let addressValue = href.slice(7).split(/[?#]/, 1)[0];
+
+    try {
+      addressValue = decodeURIComponent(addressValue);
+    } catch {
+      // Keep malformed percent encoding and extract any readable address.
+    }
+
+    for (const address of addressValue.split(/[;,]/)) {
+      values.push(...extractEmailsFromText(address));
+    }
+  }
+
+  for (const element of safeQueryAll(documentRoot, "[data-email]")) {
+    values.push(...extractEmailsFromText(getAttribute(element, "data-email")));
+  }
+
+  return uniqueEmailValues(values);
 }
 
 function normalizeHttpUrl(url, baseUrl = undefined) {
@@ -368,6 +548,152 @@ function getWhatsappNumberFromUrl(url, baseUrl = undefined) {
   }
 }
 
+function extractWhatsappNumbersFromAttributeValue(
+  value,
+  baseUrl = undefined
+) {
+  const input = String(value ?? "").replace(/\\\//g, "/");
+  const numbers = [];
+  const urlPattern =
+    /(?:https?:\/\/)?(?:wa\.me\/[^\s"'<>]+|(?:api|web)\.whatsapp\.com\/[^\s"'<>]+)|whatsapp:\/\/[^\s"'<>]+/gi;
+
+  for (const match of input.matchAll(urlPattern)) {
+    const rawUrl = match[0];
+    const url = /^wa\.me\//i.test(rawUrl) ? `https://${rawUrl}` : rawUrl;
+    const phone = getWhatsappNumberFromUrl(url, baseUrl);
+
+    if (phone) {
+      numbers.push(phone);
+    }
+  }
+
+  return numbers;
+}
+
+function collectPhonesFromWidgetSettings(
+  value,
+  baseUrl,
+  key = "",
+  output = []
+) {
+  if (value === null || value === undefined) {
+    return output;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectPhonesFromWidgetSettings(item, baseUrl, key, output);
+    }
+    return output;
+  }
+
+  if (typeof value === "object") {
+    for (const [childKey, childValue] of Object.entries(value)) {
+      collectPhonesFromWidgetSettings(
+        childValue,
+        baseUrl,
+        childKey,
+        output
+      );
+    }
+    return output;
+  }
+
+  const stringValue = String(value);
+
+  if (PHONE_ATTRIBUTE_PATTERN.test(key)) {
+    output.push(
+      ...extractPhonesFromText(stringValue, { explicit: true })
+    );
+  }
+
+  output.push(
+    ...extractWhatsappNumbersFromAttributeValue(stringValue, baseUrl)
+  );
+  return output;
+}
+
+function parseWidgetSettings(value, baseUrl) {
+  const input = String(value ?? "").trim();
+
+  if (!input) {
+    return [];
+  }
+
+  try {
+    return collectPhonesFromWidgetSettings(
+      JSON.parse(input),
+      baseUrl
+    );
+  } catch {
+    const numbers = [];
+    const labeledNumberPattern =
+      /(?:telephone|phone|mobile|whatsapp|wa[-_]?number|number)["'\s:=\\]+(\+?\d(?:[\s().-]*\d){7,14})/gi;
+
+    for (const match of input.matchAll(labeledNumberPattern)) {
+      numbers.push(
+        ...extractPhonesFromText(match[1], { explicit: true })
+      );
+    }
+
+    numbers.push(
+      ...extractWhatsappNumbersFromAttributeValue(input, baseUrl)
+    );
+    return numbers;
+  }
+}
+
+export function extractWhatsappWidgetNumbers(
+  documentRoot,
+  baseUrl = undefined
+) {
+  const phones = [];
+
+  for (const element of safeQueryAll(
+    documentRoot,
+    WHATSAPP_WIDGET_SELECTOR
+  )) {
+    const attributeNames = getAttributeNames(element);
+    const descriptor = attributeNames
+      .map((name) => `${name} ${getAttribute(element, name)}`)
+      .join(" ");
+    const role = getAttribute(element, "role").toLowerCase();
+    const hasDirectPhoneAttribute = attributeNames.some((name) =>
+      PHONE_ATTRIBUTE_PATTERN.test(name)
+    );
+    const isWhatsappWidget =
+      WHATSAPP_WIDGET_SIGNAL_PATTERN.test(descriptor) ||
+      (role === "button" && hasDirectPhoneAttribute);
+
+    if (!isWhatsappWidget) {
+      continue;
+    }
+
+    for (const attributeName of attributeNames) {
+      const attributeValue = getAttribute(element, attributeName);
+
+      if (PHONE_ATTRIBUTE_PATTERN.test(attributeName)) {
+        phones.push(
+          ...extractPhonesFromText(attributeValue, { explicit: true })
+        );
+      }
+
+      if (/^data-(?:settings|config|options)$/i.test(attributeName)) {
+        phones.push(...parseWidgetSettings(attributeValue, baseUrl));
+      }
+
+      phones.push(
+        ...extractWhatsappNumbersFromAttributeValue(
+          attributeValue,
+          baseUrl
+        )
+      );
+    }
+  }
+
+  return uniquePhoneValues(phones);
+}
+
 function extractWhatsappNumbersNearMentions(text) {
   const input = String(text ?? "");
   const values = [];
@@ -408,6 +734,9 @@ export function extractWhatsappInfo(documentRoot, baseUrl = undefined) {
 
   phones.push(
     ...extractWhatsappNumbersNearMentions(getVisiblePageText(documentRoot))
+  );
+  phones.push(
+    ...extractWhatsappWidgetNumbers(documentRoot, baseUrl)
   );
 
   return {
@@ -458,6 +787,10 @@ export function extractExternalLinks(documentRoot, sourceUrl) {
       href.startsWith("#") ||
       /^(?:javascript|mailto|tel):/i.test(href)
     ) {
+      continue;
+    }
+
+    if (classifySocialUrl(href, normalizedSourceUrl)) {
       continue;
     }
 
@@ -527,6 +860,7 @@ export function extractPageData(documentRoot = globalThis.document, options = {}
     ...metadata,
     phones,
     whatsapp: whatsappInfo.phones,
+    emails: extractEmailAddresses(documentRoot),
     socialLinks: extractSocialLinks(documentRoot, metadata.sourceUrl),
     externalLinks: extractExternalLinks(documentRoot, metadata.sourceUrl)
   };

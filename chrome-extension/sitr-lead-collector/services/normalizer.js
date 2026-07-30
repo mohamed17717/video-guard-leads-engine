@@ -112,6 +112,45 @@ export function normalizePhoneNumbers(values) {
   return Array.from(uniqueNumbers.values());
 }
 
+export function normalizeEmail(value) {
+  const email = String(value ?? "").trim();
+  const separatorIndex = email.lastIndexOf("@");
+
+  if (separatorIndex <= 0) {
+    return "";
+  }
+
+  const localPart = email.slice(0, separatorIndex);
+  const domain = email.slice(separatorIndex + 1).toLowerCase();
+
+  if (
+    !domain.includes(".") ||
+    localPart.startsWith(".") ||
+    localPart.endsWith(".") ||
+    localPart.includes("..") ||
+    domain.includes("..")
+  ) {
+    return "";
+  }
+
+  return `${localPart}@${domain}`;
+}
+
+export function normalizeEmails(values) {
+  const uniqueEmails = new Map();
+
+  for (const value of values ?? []) {
+    const email = normalizeEmail(value);
+    const key = email.toLowerCase();
+
+    if (email && !uniqueEmails.has(key)) {
+      uniqueEmails.set(key, email);
+    }
+  }
+
+  return Array.from(uniqueEmails.values());
+}
+
 function isTrackingParameter(name) {
   const normalizedName = name.toLowerCase();
   return (
@@ -202,6 +241,11 @@ function normalizeSocialLinks(values, baseUrl) {
 export function normalizeExtractedData(data) {
   const rawSourceUrl = String(data?.sourceUrl ?? "").trim();
   const sourceUrl = normalizeUrl(rawSourceUrl) || rawSourceUrl;
+  const socialLinks = normalizeSocialLinks(data?.socialLinks, sourceUrl);
+  const socialUrls = new Set(socialLinks.map(({ url }) => url));
+  const externalLinks = normalizeUrls(data?.externalLinks, sourceUrl).filter(
+    (url) => !socialUrls.has(url)
+  );
   let hostname = String(data?.hostname ?? "").trim();
 
   try {
@@ -217,7 +261,8 @@ export function normalizeExtractedData(data) {
     capturedAt: String(data?.capturedAt ?? ""),
     phones: normalizePhoneNumbers(data?.phones),
     whatsapp: normalizePhoneNumbers(data?.whatsapp),
-    socialLinks: normalizeSocialLinks(data?.socialLinks, sourceUrl),
-    externalLinks: normalizeUrls(data?.externalLinks, sourceUrl)
+    emails: normalizeEmails(data?.emails),
+    socialLinks,
+    externalLinks
   };
 }

@@ -3,12 +3,15 @@ import test from "node:test";
 
 import {
   classifySocialUrl,
+  extractEmailAddresses,
+  extractEmailsFromText,
   extractExternalLinks,
   extractPageData,
   extractPhoneNumbers,
   extractPhonesFromText,
   extractSocialLinks,
-  extractWhatsappInfo
+  extractWhatsappInfo,
+  extractWhatsappWidgetNumbers
 } from "../services/extractor.js";
 
 function element({ text = "", attributes = {} } = {}) {
@@ -17,6 +20,9 @@ function element({ text = "", attributes = {} } = {}) {
     textContent: text,
     getAttribute(name) {
       return attributes[name] ?? null;
+    },
+    getAttributeNames() {
+      return Object.keys(attributes);
     }
   };
 }
@@ -28,7 +34,9 @@ function documentFixture({
   anchors = [],
   buttons = [],
   contactSections = [],
-  meta = []
+  meta = [],
+  whatsappWidgets = [],
+  emailElements = []
 } = {}) {
   return {
     title,
@@ -49,6 +57,17 @@ function documentFixture({
 
       if (selector.includes("address") && selector.includes("contact")) {
         return contactSections;
+      }
+
+      if (
+        selector.includes("joinchat") ||
+        selector.includes("data-whatsapp")
+      ) {
+        return whatsappWidgets;
+      }
+
+      if (selector === "[data-email]") {
+        return emailElements;
       }
 
       return [];
@@ -81,6 +100,20 @@ test("extracts Egyptian and international phone formats while rejecting noise", 
   ]);
 });
 
+test("rejects compact, spaced, ranged, and date-time values", () => {
+  const text = [
+    "ISO date and time: 2026-07-30 04:00:00",
+    "Spaced date: 30 07 2026",
+    "US-style date: 07 30 2026",
+    "Compact date: 30072026",
+    "Compact ISO date: 20260730",
+    "Year range: 2025-2026",
+    "Real phone: +201012345678"
+  ].join("\n");
+
+  assert.deepEqual(extractPhonesFromText(text), ["+201012345678"]);
+});
+
 test("collects phones from visible text, tel links, controls, contact areas, and meta", () => {
   const documentRoot = documentFixture({
     bodyText: "General information only.",
@@ -111,6 +144,46 @@ test("collects phones from visible text, tel links, controls, contact areas, and
   ]);
 });
 
+test("extracts visible, mailto, metadata, data attribute, and obfuscated emails", () => {
+  const documentRoot = documentFixture({
+    bodyText: [
+      "Email: Hello@Example.COM",
+      "Backup: support [at] academy [dot] org"
+    ].join("\n"),
+    anchors: [
+      element({
+        text: "Email the team",
+        attributes: { href: "mailto:sales@example.com?subject=Hello" }
+      })
+    ],
+    meta: [
+      element({
+        attributes: {
+          name: "description",
+          content: "Contact courses@example.net"
+        }
+      })
+    ],
+    emailElements: [
+      element({ attributes: { "data-email": "hidden@example.edu" } })
+    ]
+  });
+
+  assert.deepEqual(
+    extractEmailsFromText(
+      "Hello@Example.COM and support [at] academy [dot] org"
+    ),
+    ["Hello@example.com", "support@academy.org"]
+  );
+  assert.deepEqual(extractEmailAddresses(documentRoot), [
+    "Hello@example.com",
+    "support@academy.org",
+    "courses@example.net",
+    "sales@example.com",
+    "hidden@example.edu"
+  ]);
+});
+
 test("extracts WhatsApp links, URL numbers, and nearby text numbers", () => {
   const documentRoot = documentFixture({
     bodyText: "For WhatsApp support, message 01012345678 today.",
@@ -133,6 +206,60 @@ test("extracts WhatsApp links, URL numbers, and nearby text numbers", () => {
     extractWhatsappInfo(documentRoot, "https://example.com").phones,
     ["201112345678", "966501234567", "201512345678", "01012345678"]
   );
+});
+
+test("extracts WhatsApp numbers from embedded widget configuration", () => {
+  const settings = JSON.stringify({
+    telephone: "201027395528",
+    mobile_only: false,
+    whatsapp_web: false,
+    button_delay: 3,
+    message_send: "مرحبا، محتاج بعض المساعدة"
+  });
+  const documentRoot = documentFixture({
+    whatsappWidgets: [
+      element({
+        attributes: {
+          class: "joinchat joinchat--left joinchat--show",
+          "data-settings": settings,
+          "aria-hidden": "false"
+        }
+      })
+    ]
+  });
+
+  assert.deepEqual(extractWhatsappWidgetNumbers(documentRoot), [
+    "201027395528"
+  ]);
+  assert.deepEqual(extractWhatsappInfo(documentRoot).phones, [
+    "201027395528"
+  ]);
+});
+
+test("extracts WhatsApp numbers from button attributes and embedded URLs", () => {
+  const documentRoot = documentFixture({
+    whatsappWidgets: [
+      element({
+        attributes: {
+          role: "button",
+          class: "whatsapp-contact-button",
+          "data-phone": "+966501234567"
+        }
+      }),
+      element({
+        attributes: {
+          role: "button",
+          onclick:
+            "window.open('https://api.whatsapp.com/send?phone=201112345678')"
+        }
+      })
+    ]
+  });
+
+  assert.deepEqual(extractWhatsappWidgetNumbers(documentRoot), [
+    "+966501234567",
+    "201112345678"
+  ]);
 });
 
 test("classifies supported social platforms", () => {
@@ -177,7 +304,6 @@ test("returns unique social and external links and excludes internal or invalid 
     }
   ]);
   assert.deepEqual(extractExternalLinks(documentRoot, sourceUrl), [
-    "https://instagram.com/example",
     "https://partner.test/offer"
   ]);
 });
@@ -201,15 +327,13 @@ test("returns the complete extraction result without saving data", () => {
     capturedAt,
     phones: ["01012345678"],
     whatsapp: [],
+    emails: [],
     socialLinks: [
       {
         platform: "linkedin",
         url: "https://linkedin.com/company/example"
       }
     ],
-    externalLinks: [
-      "https://linkedin.com/company/example",
-      "https://partner.test/"
-    ]
+    externalLinks: ["https://partner.test/"]
   });
 });

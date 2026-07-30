@@ -9,7 +9,11 @@ import {
   downloadLeadCollectionAsJson,
   downloadLeadCollectionAsTxt
 } from "../services/exporter.js";
-import { normalizeExtractedData } from "../services/normalizer.js";
+import { extractPhonesFromText } from "../services/extractor.js";
+import {
+  normalizeExtractedData,
+  normalizePhoneNumber
+} from "../services/normalizer.js";
 
 const statusMessage = document.querySelector("#status-message");
 const leadCount = document.querySelector("#lead-count");
@@ -31,6 +35,12 @@ const clearAfterExportButton = document.querySelector(
 );
 const keepAfterExportButton = document.querySelector(
   "#keep-after-export"
+);
+const manualPhoneInput = document.querySelector("#manual-phone");
+const manualWhatsappInput = document.querySelector("#manual-whatsapp");
+const addManualPhoneButton = document.querySelector("#add-manual-phone");
+const addManualWhatsappButton = document.querySelector(
+  "#add-manual-whatsapp"
 );
 
 let pendingLead = null;
@@ -87,6 +97,22 @@ function renderPhoneList(selector, phones) {
   }
 }
 
+function renderValueList(selector, values) {
+  const list = document.querySelector(selector);
+  clearList(list);
+
+  if (!values.length) {
+    appendEmptyValue(list);
+    return;
+  }
+
+  for (const value of values) {
+    const item = document.createElement("li");
+    item.textContent = value;
+    list.append(item);
+  }
+}
+
 function renderLinkList(selector, links, getLabel) {
   const list = document.querySelector(selector);
   clearList(list);
@@ -117,6 +143,7 @@ function getUsefulValueCount(lead) {
   return (
     lead.phones.length +
     lead.whatsapp.length +
+    lead.emails.length +
     lead.socialLinks.length +
     lead.externalLinks.length
   );
@@ -148,6 +175,10 @@ function setStorageLoading(isLoading) {
   clearAllButton.disabled = isLoading;
   exportTxtButton.disabled = isLoading;
   exportJsonButton.disabled = isLoading;
+  manualPhoneInput.disabled = isLoading;
+  manualWhatsappInput.disabled = isLoading;
+  addManualPhoneButton.disabled = isLoading;
+  addManualWhatsappButton.disabled = isLoading;
   updateSaveButton();
 }
 
@@ -158,15 +189,18 @@ function renderPreview(lead) {
 
   setCount("#preview-phone-count", lead.phones.length);
   setCount("#preview-whatsapp-count", lead.whatsapp.length);
+  setCount("#preview-email-count", lead.emails.length);
   setCount("#preview-social-count", lead.socialLinks.length);
   setCount("#preview-external-count", lead.externalLinks.length);
   setCount("#phone-section-count", lead.phones.length);
   setCount("#whatsapp-section-count", lead.whatsapp.length);
+  setCount("#email-section-count", lead.emails.length);
   setCount("#social-section-count", lead.socialLinks.length);
   setCount("#external-section-count", lead.externalLinks.length);
 
   renderPhoneList("#preview-phones", lead.phones);
   renderPhoneList("#preview-whatsapp", lead.whatsapp);
+  renderValueList("#preview-emails", lead.emails);
   renderLinkList(
     "#preview-social",
     lead.socialLinks,
@@ -181,8 +215,68 @@ function renderPreview(lead) {
 function hidePreview() {
   pendingLead = null;
   preview.hidden = true;
+  manualPhoneInput.value = "";
+  manualWhatsappInput.value = "";
   hideDuplicateWarning();
 }
+
+function addManualNumber(field, input, label) {
+  if (!pendingLead) {
+    setStatus("Capture a page before adding a number.", "error");
+    return;
+  }
+
+  const rawValue = input.value.trim();
+  const matches = extractPhonesFromText(rawValue, { explicit: true });
+
+  if (matches.length !== 1) {
+    setStatus(
+      `Enter one valid ${label.toLowerCase()} number. Dates are not accepted.`,
+      "error"
+    );
+    input.focus();
+    return;
+  }
+
+  const phone = normalizePhoneNumber(matches[0]);
+  const isDuplicate = pendingLead[field].some(
+    (storedPhone) => storedPhone.normalized === phone.normalized
+  );
+
+  if (isDuplicate) {
+    setStatus(`That ${label.toLowerCase()} number is already in the preview.`, "warning");
+    input.focus();
+    return;
+  }
+
+  pendingLead[field] = [...pendingLead[field], phone];
+  input.value = "";
+  renderPreview(pendingLead);
+  input.focus();
+  setStatus(`${label} number added to the preview.`, "success");
+}
+
+addManualPhoneButton.addEventListener("click", () => {
+  addManualNumber("phones", manualPhoneInput, "Phone");
+});
+
+addManualWhatsappButton.addEventListener("click", () => {
+  addManualNumber("whatsapp", manualWhatsappInput, "WhatsApp");
+});
+
+manualPhoneInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addManualNumber("phones", manualPhoneInput, "Phone");
+  }
+});
+
+manualWhatsappInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addManualNumber("whatsapp", manualWhatsappInput, "WhatsApp");
+  }
+});
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({

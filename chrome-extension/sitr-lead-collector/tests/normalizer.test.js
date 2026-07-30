@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   normalizeExtractedData,
+  normalizeEmail,
+  normalizeEmails,
   normalizePhoneNumber,
   normalizePhoneNumbers,
   normalizeUrl,
@@ -70,6 +72,18 @@ test("deduplicates phone variants by normalized value", () => {
   );
 });
 
+test("normalizes and deduplicates email addresses", () => {
+  assert.equal(normalizeEmail(" Hello@Example.COM "), "Hello@example.com");
+  assert.deepEqual(
+    normalizeEmails([
+      "Hello@Example.COM",
+      "hello@example.com",
+      "sales@academy.org"
+    ]),
+    ["Hello@example.com", "sales@academy.org"]
+  );
+});
+
 test("normalizes URLs while preserving useful query parameters", () => {
   assert.equal(
     normalizeUrl(
@@ -121,6 +135,7 @@ test("normalizes a complete extracted preview without mutating its shape", () =>
       capturedAt: "2026-07-30T12:00:00.000Z",
       phones: ["010 1234 5678", "+201012345678"],
       whatsapp: ["00201012345678"],
+      emails: ["Hello@Example.COM", "hello@example.com"],
       socialLinks: [
         {
           platform: "instagram",
@@ -128,6 +143,7 @@ test("normalizes a complete extracted preview without mutating its shape", () =>
         }
       ],
       externalLinks: [
+        "https://instagram.com/example#external-copy",
         "https://partner.test/?fbclid=abc",
         "https://partner.test"
       ]
@@ -149,6 +165,7 @@ test("normalizes a complete extracted preview without mutating its shape", () =>
           normalized: "+201012345678"
         }
       ],
+      emails: ["Hello@example.com"],
       socialLinks: [
         {
           platform: "instagram",
