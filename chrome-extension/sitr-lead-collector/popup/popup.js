@@ -24,8 +24,10 @@ import {
 } from "../services/normalizer.js";
 
 const statusMessage = document.querySelector("#status-message");
+const popup = document.querySelector(".popup");
 const leadCount = document.querySelector("#lead-count");
 const captureButton = document.querySelector("#capture-page");
+const viewLeadsButton = document.querySelector("#view-leads");
 const preview = document.querySelector("#lead-preview");
 const saveLeadButton = document.querySelector("#save-lead");
 const cancelPreviewButton = document.querySelector("#cancel-preview");
@@ -73,12 +75,25 @@ const previewCopyButtons = [
 ];
 
 let pendingLead = null;
+let captureOperationPending = false;
 let storageOperationPending = false;
 let completedExportLabel = "File";
 
 function setStatus(message, state = "neutral") {
   statusMessage.textContent = message;
   statusMessage.dataset.state = state;
+}
+
+function setButtonLoading(button, isLoading, loadingLabel) {
+  if (!button.dataset.defaultLabel) {
+    button.dataset.defaultLabel = button.textContent.trim();
+  }
+
+  button.setAttribute("aria-busy", String(isLoading));
+  button.textContent = isLoading
+    ? loadingLabel
+    : button.dataset.defaultLabel;
+  button.disabled = isLoading;
 }
 
 function isAccessiblePageUrl(value) {
@@ -91,10 +106,15 @@ function isAccessiblePageUrl(value) {
 }
 
 function setCaptureLoading(isLoading) {
-  captureButton.disabled = isLoading;
-  captureButton.textContent = isLoading
-    ? "Capturing…"
-    : "Capture This Page";
+  captureOperationPending = isLoading;
+  popup.setAttribute("aria-busy", String(isLoading));
+  setButtonLoading(captureButton, isLoading, "Extracting…");
+  captureButton.disabled = isLoading || storageOperationPending;
+  viewLeadsButton.disabled = isLoading || storageOperationPending;
+  clearAllButton.disabled = isLoading || storageOperationPending;
+  exportTxtButton.disabled = isLoading || storageOperationPending;
+  exportJsonButton.disabled = isLoading || storageOperationPending;
+  exportCsvButton.disabled = isLoading || storageOperationPending;
 }
 
 function clearList(list) {
@@ -200,13 +220,18 @@ function showDuplicateWarning() {
 
 function setStorageLoading(isLoading) {
   storageOperationPending = isLoading;
+  popup.setAttribute("aria-busy", String(isLoading));
+  preview.setAttribute("aria-busy", String(isLoading));
+  captureButton.disabled = isLoading || captureOperationPending;
+  viewLeadsButton.disabled = isLoading || captureOperationPending;
+  cancelPreviewButton.disabled = isLoading;
   replaceLeadButton.disabled = isLoading;
   mergeLeadButton.disabled = isLoading;
   cancelDuplicateButton.disabled = isLoading;
-  clearAllButton.disabled = isLoading;
-  exportTxtButton.disabled = isLoading;
-  exportJsonButton.disabled = isLoading;
-  exportCsvButton.disabled = isLoading;
+  clearAllButton.disabled = isLoading || captureOperationPending;
+  exportTxtButton.disabled = isLoading || captureOperationPending;
+  exportJsonButton.disabled = isLoading || captureOperationPending;
+  exportCsvButton.disabled = isLoading || captureOperationPending;
   manualPhoneInput.disabled = isLoading;
   manualWhatsappInput.disabled = isLoading;
   addManualPhoneButton.disabled = isLoading;
@@ -471,7 +496,7 @@ async function captureCurrentPage() {
 
 captureButton.addEventListener("click", captureCurrentPage);
 
-document.querySelector("#view-leads").addEventListener("click", async () => {
+viewLeadsButton.addEventListener("click", async () => {
   try {
     await chrome.tabs.create({
       url: chrome.runtime.getURL("leads/leads.html")
@@ -498,8 +523,20 @@ async function storePendingLead(onDuplicate = "reject") {
     return;
   }
 
+  const operationButton = {
+    reject: saveLeadButton,
+    replace: replaceLeadButton,
+    merge: mergeLeadButton
+  }[onDuplicate];
+  const loadingLabel = {
+    reject: "Saving…",
+    replace: "Replacing…",
+    merge: "Merging…"
+  }[onDuplicate];
+
   setStorageLoading(true);
-  setStatus("Saving lead…");
+  setButtonLoading(operationButton, true, loadingLabel);
+  setStatus(`${loadingLabel.slice(0, -1)} lead…`);
 
   try {
     const result = await addLead(pendingLead, { onDuplicate });
@@ -526,6 +563,7 @@ async function storePendingLead(onDuplicate = "reject") {
     console.error("Unable to save lead.", error);
     setStatus("The lead could not be saved. Please try again.", "error");
   } finally {
+    setButtonLoading(operationButton, false, loadingLabel);
     setStorageLoading(false);
   }
 }
@@ -558,6 +596,8 @@ clearAllButton.addEventListener("click", async () => {
   }
 
   setStorageLoading(true);
+  setButtonLoading(clearAllButton, true, "Clearing…");
+  setStatus("Clearing saved leads…");
 
   try {
     await clearAllLeads();
@@ -568,12 +608,14 @@ clearAllButton.addEventListener("click", async () => {
     console.error("Unable to clear leads.", error);
     setStatus("Saved leads could not be cleared.", "error");
   } finally {
+    setButtonLoading(clearAllButton, false, "Clearing…");
     setStorageLoading(false);
   }
 });
 
-async function exportStoredLeads(label, downloadExport) {
+async function exportStoredLeads(label, downloadExport, triggerButton) {
   setStorageLoading(true);
+  setButtonLoading(triggerButton, true, "Exporting…");
   setStatus(`Preparing ${label} export…`);
 
   try {
@@ -593,20 +635,21 @@ async function exportStoredLeads(label, downloadExport) {
     console.error(`Unable to export leads as ${label}.`, error);
     setStatus(`The ${label} file could not be downloaded.`, "error");
   } finally {
+    setButtonLoading(triggerButton, false, "Exporting…");
     setStorageLoading(false);
   }
 }
 
 exportTxtButton.addEventListener("click", () => {
-  exportStoredLeads("TXT", downloadLeadCollectionAsTxt);
+  exportStoredLeads("TXT", downloadLeadCollectionAsTxt, exportTxtButton);
 });
 
 exportJsonButton.addEventListener("click", () => {
-  exportStoredLeads("JSON", downloadLeadCollectionAsJson);
+  exportStoredLeads("JSON", downloadLeadCollectionAsJson, exportJsonButton);
 });
 
 exportCsvButton.addEventListener("click", () => {
-  exportStoredLeads("CSV", downloadLeadCollectionAsCsv);
+  exportStoredLeads("CSV", downloadLeadCollectionAsCsv, exportCsvButton);
 });
 
 keepAfterExportButton.addEventListener("click", () => {
@@ -618,8 +661,10 @@ keepAfterExportButton.addEventListener("click", () => {
 });
 
 clearAfterExportButton.addEventListener("click", async () => {
-  clearAfterExportButton.disabled = true;
+  exportDialog.setAttribute("aria-busy", "true");
+  setButtonLoading(clearAfterExportButton, true, "Clearing…");
   keepAfterExportButton.disabled = true;
+  setStatus("Clearing saved leads…");
 
   try {
     await clearAllLeads();
@@ -638,8 +683,9 @@ clearAfterExportButton.addEventListener("click", async () => {
       "error"
     );
   } finally {
-    clearAfterExportButton.disabled = false;
+    setButtonLoading(clearAfterExportButton, false, "Clearing…");
     keepAfterExportButton.disabled = false;
+    exportDialog.setAttribute("aria-busy", "false");
   }
 });
 

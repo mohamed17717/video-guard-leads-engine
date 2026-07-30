@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <main class="popup">
+    <main class="popup" aria-busy="false">
       <header class="popup__header">
         <div class="brand-mark" aria-hidden="true">S</div>
         <div>
@@ -25,7 +25,13 @@
         Capture This Page
       </button>
 
-      <section id="lead-preview" class="preview" aria-labelledby="preview-title" hidden>
+      <section
+        id="lead-preview"
+        class="preview"
+        aria-labelledby="preview-title"
+        aria-busy="false"
+        hidden
+      >
         <div class="preview__header">
           <div>
             <p class="eyebrow">Review before saving</p>
@@ -36,7 +42,7 @@
         <dl class="preview__summary">
           <div>
             <dt>Page</dt>
-            <dd id="preview-page">—</dd>
+            <dd id="preview-page" dir="auto">—</dd>
           </div>
           <div>
             <dt>Phone Numbers</dt>
@@ -66,7 +72,7 @@
               Phone Numbers
               <span id="phone-section-count" class="count-badge">0</span>
             </summary>
-            <ul id="preview-phones" class="value-list"></ul>
+            <ul id="preview-phones" class="value-list" dir="auto"></ul>
           </details>
 
           <details>
@@ -74,7 +80,7 @@
               WhatsApp
               <span id="whatsapp-section-count" class="count-badge">0</span>
             </summary>
-            <ul id="preview-whatsapp" class="value-list"></ul>
+            <ul id="preview-whatsapp" class="value-list" dir="auto"></ul>
           </details>
 
           <details>
@@ -82,7 +88,7 @@
               Emails
               <span id="email-section-count" class="count-badge">0</span>
             </summary>
-            <ul id="preview-emails" class="value-list"></ul>
+            <ul id="preview-emails" class="value-list" dir="auto"></ul>
           </details>
 
           <details>
@@ -90,7 +96,7 @@
               Social Links
               <span id="social-section-count" class="count-badge">0</span>
             </summary>
-            <ul id="preview-social" class="value-list"></ul>
+            <ul id="preview-social" class="value-list" dir="auto"></ul>
           </details>
 
           <details>
@@ -98,26 +104,26 @@
               External Links
               <span id="external-section-count" class="count-badge">0</span>
             </summary>
-            <ul id="preview-external" class="value-list"></ul>
+            <ul id="preview-external" class="value-list" dir="auto"></ul>
           </details>
         </div>
 
         <section class="quick-copy" aria-labelledby="quick-copy-title">
           <h3 id="quick-copy-title">Quick copy</h3>
           <div class="quick-copy__actions">
-            <button id="copy-preview-phones" class="button button--secondary" type="button">
+            <button id="copy-preview-phones" class="button button--secondary" type="button" disabled>
               Copy Phones
             </button>
-            <button id="copy-preview-whatsapp" class="button button--secondary" type="button">
+            <button id="copy-preview-whatsapp" class="button button--secondary" type="button" disabled>
               Copy WhatsApp
             </button>
-            <button id="copy-preview-social" class="button button--secondary" type="button">
+            <button id="copy-preview-social" class="button button--secondary" type="button" disabled>
               Copy Social Links
             </button>
-            <button id="copy-preview-external" class="button button--secondary" type="button">
+            <button id="copy-preview-external" class="button button--secondary" type="button" disabled>
               Copy External Links
             </button>
-            <button id="copy-preview-lead" class="button button--secondary quick-copy__complete" type="button">
+            <button id="copy-preview-lead" class="button button--secondary quick-copy__complete" type="button" disabled>
               Copy Complete Lead
             </button>
           </div>
@@ -135,6 +141,7 @@
               <input
                 id="manual-phone"
                 type="tel"
+                dir="auto"
                 placeholder="010 1234 5678"
                 autocomplete="tel"
               >
@@ -150,6 +157,7 @@
               <input
                 id="manual-whatsapp"
                 type="tel"
+                dir="auto"
                 placeholder="+20 10 1234 5678"
                 autocomplete="tel"
               >
@@ -177,7 +185,7 @@
         </div>
 
         <div class="preview__actions">
-          <button id="save-lead" class="button button--primary" type="button">
+          <button id="save-lead" class="button button--primary" type="button" disabled>
             Save Lead
           </button>
           <button id="cancel-preview" class="button button--secondary" type="button">
@@ -206,12 +214,24 @@
         Clear All
       </button>
 
-      <p id="status-message" class="status" role="status" aria-live="polite">
+      <p
+        id="status-message"
+        class="status"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        dir="auto"
+      >
         Ready to capture a page.
       </p>
     </main>
 
-    <dialog id="export-complete-dialog" class="export-dialog">
+    <dialog
+      id="export-complete-dialog"
+      class="export-dialog"
+      aria-labelledby="export-dialog-title"
+      aria-busy="false"
+    >
       <h2 id="export-dialog-title">Export started</h2>
       <p>
         The file was downloaded successfully.<br>
