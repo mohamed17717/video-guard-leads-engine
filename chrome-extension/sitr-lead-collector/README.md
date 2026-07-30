@@ -8,10 +8,10 @@ presses **Capture This Page**. Page extraction is not run automatically.
 
 ## Current status
 
-This version contains the project structure, popup interface, and tested page
-extraction utilities. Connecting extraction to the popup, lead viewing, export,
-normalization, storage, and clearing behavior remain placeholders for later
-tasks.
+This version contains the project structure, popup interface, tested page
+extraction utilities, and tested phone and URL normalization. Connecting
+extraction to the popup, lead viewing, export, storage, and clearing behavior
+remain placeholders for later tasks.
 
 ## Load the extension in Chrome
 
@@ -45,5 +45,8 @@ sitr-lead-collector/
 │   ├── icon16.png
 │   ├── icon48.png
 │   └── icon128.png
+├── tests/
+│   ├── extractor.test.js
+│   └── normalizer.test.js
 └── README.md
 ```
