@@ -72,6 +72,47 @@ test("deduplicates phone variants by normalized value", () => {
   );
 });
 
+test("preserves phone context and source through normalization", () => {
+  assert.deepEqual(
+    normalizePhoneNumber({
+      raw: "٠١٠ ١٢٣٤ ٥٦٧٨",
+      context: "للتواصل والحجز عبر واتساب",
+      source: "visible-text"
+    }),
+    {
+      raw: "٠١٠ ١٢٣٤ ٥٦٧٨",
+      normalized: "+201012345678",
+      context: "للتواصل والحجز عبر واتساب",
+      source: "visible-text"
+    }
+  );
+});
+
+test("keeps the strongest source when normalized phone variants collide", () => {
+  assert.deepEqual(
+    normalizePhoneNumbers([
+      {
+        raw: "01012345678",
+        context: "Contact us",
+        source: "visible-text"
+      },
+      {
+        raw: "+201012345678",
+        context: "Call admissions",
+        source: "tel-link"
+      }
+    ]),
+    [
+      {
+        raw: "+201012345678",
+        normalized: "+201012345678",
+        context: "Call admissions",
+        source: "tel-link"
+      }
+    ]
+  );
+});
+
 test("normalizes and deduplicates email addresses", () => {
   assert.equal(normalizeEmail(" Hello@Example.COM "), "Hello@example.com");
   assert.deepEqual(

@@ -179,7 +179,12 @@ test("maps lead data to the CSV schema and moves extra data into notes", () => {
     capturedAt: "2026-07-30T03:20:00Z",
     lastUpdatedAt: "2026-07-30T04:10:00Z",
     phones: [
-      { raw: "010 1234 5678", normalized: "+201012345678" },
+      {
+        raw: "010 1234 5678",
+        normalized: "+201012345678",
+        context: "Call admissions",
+        source: "tel-link"
+      },
       { raw: "011 2345 6789", normalized: "+201123456789" }
     ],
     whatsapp: [
@@ -215,6 +220,10 @@ test("maps lead data to the CSV schema and moves extra data into notes", () => {
   assert.equal(row.source, "chrome extension");
   assert.match(row.notes, /page title: أكاديمية, "أحمد"/);
   assert.match(row.notes, /other phones: \+201123456789/);
+  assert.match(
+    row.notes,
+    /phone details: \+201012345678 \(source=tel-link, context=Call admissions\)/
+  );
   assert.match(row.notes, /other WhatsApp: \+201545678901/);
   assert.match(row.notes, /other emails: sales@example.com/);
   assert.match(row.notes, /YouTube: https:\/\/youtube.com\/@example/);

@@ -185,6 +185,39 @@ test("merges duplicate values and keeps the oldest capture time", () => {
   ]);
 });
 
+test("upgrades duplicate phone provenance when merging leads", () => {
+  const merged = mergeLeadRecords(
+    lead({
+      id: "lead-context",
+      phones: [
+        {
+          raw: "01012345678",
+          normalized: "+201012345678"
+        }
+      ]
+    }),
+    lead({
+      phones: [
+        {
+          raw: "+201012345678",
+          normalized: "+201012345678",
+          context: "Call admissions",
+          source: "tel-link"
+        }
+      ]
+    })
+  );
+
+  assert.deepEqual(merged.phones, [
+    {
+      raw: "+201012345678",
+      normalized: "+201012345678",
+      context: "Call admissions",
+      source: "tel-link"
+    }
+  ]);
+});
+
 test("merges a duplicate in storage without increasing the count", async () => {
   installStorage();
   const firstResult = await addLead(

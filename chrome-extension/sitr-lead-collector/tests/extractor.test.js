@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -7,12 +8,14 @@ import {
   extractEmailsFromText,
   extractExternalLinks,
   extractPageData,
+  extractPhoneCandidatesFromText,
   extractPhoneNumbers,
   extractPhonesFromText,
   extractSocialLinks,
   extractWhatsappInfo,
   extractWhatsappWidgetNumbers
 } from "../services/extractor.js";
+import { normalizeExtractedData } from "../services/normalizer.js";
 
 function element({ text = "", attributes = {} } = {}) {
   return {
@@ -75,6 +78,65 @@ function documentFixture({
   };
 }
 
+function parseAttributes(source) {
+  const attributes = {};
+  const pattern = /([:\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+
+  for (const match of source.matchAll(pattern)) {
+    attributes[match[1]] = match[2] ?? match[3] ?? "";
+  }
+
+  return attributes;
+}
+
+function stripHtml(source) {
+  return source
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n")
+    .trim();
+}
+
+function parseElements(html, tagName) {
+  const pattern = new RegExp(
+    `<${tagName}\\b([^>]*)>([\\s\\S]*?)<\\/${tagName}>`,
+    "gi"
+  );
+
+  return Array.from(html.matchAll(pattern), (match) =>
+    element({
+      text: stripHtml(match[2]),
+      attributes: parseAttributes(match[1])
+    })
+  );
+}
+
+function loadHtmlFixture(filename) {
+  const html = readFileSync(
+    new URL(`./fixtures/${filename}`, import.meta.url),
+    "utf8"
+  );
+  const title = stripHtml(
+    html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ""
+  );
+  const bodyHtml =
+    html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? "";
+  const meta = Array.from(
+    html.matchAll(/<meta\b([^>]*)>/gi),
+    (match) => element({ attributes: parseAttributes(match[1]) })
+  );
+
+  return documentFixture({
+    title,
+    bodyText: stripHtml(bodyHtml),
+    anchors: parseElements(bodyHtml, "a"),
+    buttons: parseElements(bodyHtml, "button"),
+    meta
+  });
+}
+
 test("extracts Egyptian and international phone formats while rejecting noise", () => {
   const text = [
     "Mobile: 01012345678",
@@ -114,7 +176,7 @@ test("rejects compact, spaced, ranged, and date-time values", () => {
   assert.deepEqual(extractPhonesFromText(text), ["+201012345678"]);
 });
 
-test("collects phones from visible text, tel links, controls, contact areas, and meta", () => {
+test("collects structured phones from visible text, tel links, controls, contact areas, and meta", () => {
   const documentRoot = documentFixture({
     bodyText: "General information only.",
     anchors: [
@@ -136,11 +198,31 @@ test("collects phones from visible text, tel links, controls, contact areas, and
   });
 
   assert.deepEqual(extractPhoneNumbers(documentRoot), [
-    "01012345678",
-    "01212345678",
-    "03 1234567",
-    "+966501234567",
-    "+201112345678"
+    {
+      raw: "+201112345678",
+      context: "Call",
+      source: "tel-link"
+    },
+    {
+      raw: "01012345678",
+      context: "Call",
+      source: "anchor-text"
+    },
+    {
+      raw: "01212345678",
+      context: "Phone",
+      source: "button-text"
+    },
+    {
+      raw: "03 1234567",
+      context: "Contact us on",
+      source: "visible-text"
+    },
+    {
+      raw: "+966501234567",
+      context: "description Telephone",
+      source: "meta-tag"
+    }
   ]);
 });
 
@@ -202,10 +284,18 @@ test("extracts WhatsApp links, URL numbers, and nearby text numbers", () => {
     ]
   });
 
+  const phones = extractWhatsappInfo(
+    documentRoot,
+    "https://example.com"
+  ).phones;
+
   assert.deepEqual(
-    extractWhatsappInfo(documentRoot, "https://example.com").phones,
+    phones.map(({ raw }) => raw),
     ["201112345678", "966501234567", "201512345678", "01012345678"]
   );
+  assert.equal(phones[0].source, "whatsapp-link");
+  assert.equal(phones[3].source, "visible-text");
+  assert.match(phones[3].context, /WhatsApp support/);
 });
 
 test("extracts WhatsApp numbers from embedded widget configuration", () => {
@@ -232,7 +322,11 @@ test("extracts WhatsApp numbers from embedded widget configuration", () => {
     "201027395528"
   ]);
   assert.deepEqual(extractWhatsappInfo(documentRoot).phones, [
-    "201027395528"
+    {
+      raw: "201027395528",
+      context: "WhatsApp contact button",
+      source: "whatsapp-link"
+    }
   ]);
 });
 
@@ -325,7 +419,13 @@ test("returns the complete extraction result without saving data", () => {
     sourceUrl: "https://courses.example.org/lesson",
     hostname: "courses.example.org",
     capturedAt,
-    phones: ["01012345678"],
+    phones: [
+      {
+        raw: "01012345678",
+        context: "Phone",
+        source: "visible-text"
+      }
+    ],
     whatsapp: [],
     emails: [],
     socialLinks: [
@@ -336,4 +436,72 @@ test("returns the complete extraction result without saving data", () => {
     ],
     externalLinks: ["https://partner.test/"]
   });
+});
+
+test("limits phone context instead of retaining full page text", () => {
+  const prefix = "Course information ".repeat(30);
+  const suffix = " Booking details".repeat(30);
+  const candidates = extractPhoneCandidatesFromText(
+    `${prefix} Call +201012345678 ${suffix}`
+  );
+
+  assert.equal(candidates.length, 1);
+  assert.ok(candidates[0].context.length <= 180);
+  assert.ok(candidates[0].context.length < prefix.length + suffix.length);
+  assert.equal(candidates[0].source, "visible-text");
+});
+
+test("extracts accurate English contacts from a representative test page", () => {
+  const normalized = normalizeExtractedData(
+    extractPageData(loadHtmlFixture("phone-accuracy-english.html"))
+  );
+  const numbers = normalized.phones.map(({ normalized: value }) => value);
+  const byNumber = new Map(
+    normalized.phones.map((phone) => [phone.normalized, phone])
+  );
+
+  assert.deepEqual(numbers, [
+    "+201012345678",
+    "+442079460958",
+    "+201512345678",
+    "+201112345678",
+    "+971501234567",
+    "+966501234567"
+  ]);
+  assert.equal(byNumber.get("+201012345678").source, "visible-text");
+  assert.equal(byNumber.get("+201112345678").source, "tel-link");
+  assert.equal(byNumber.get("+201512345678").source, "button-text");
+  assert.equal(byNumber.get("+971501234567").source, "meta-tag");
+  assert.equal(byNumber.get("+966501234567").source, "whatsapp-link");
+  assert.ok(
+    normalized.phones.every(
+      ({ context }) => context.length > 0 && context.length <= 180
+    )
+  );
+});
+
+test("extracts Arabic text and Arabic-Indic digits while rejecting Arabic noise", () => {
+  const normalized = normalizeExtractedData(
+    extractPageData(loadHtmlFixture("phone-accuracy-arabic.html"))
+  );
+  const byNumber = new Map(
+    normalized.phones.map((phone) => [phone.normalized, phone])
+  );
+
+  assert.deepEqual(Array.from(byNumber.keys()), [
+    "+201012345678",
+    "+201212345678",
+    "+201112345678",
+    "+201022222222",
+    "+966551234567"
+  ]);
+  assert.equal(byNumber.get("+201012345678").raw, "٠١٠١٢٣٤٥٦٧٨");
+  assert.match(
+    byNumber.get("+201012345678").context,
+    /للتواصل والحجز عبر واتساب/
+  );
+  assert.equal(byNumber.get("+201112345678").source, "tel-link");
+  assert.equal(byNumber.get("+201212345678").source, "button-text");
+  assert.equal(byNumber.get("+201022222222").source, "meta-tag");
+  assert.equal(byNumber.get("+966551234567").source, "whatsapp-link");
 });
