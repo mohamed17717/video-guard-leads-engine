@@ -23,6 +23,16 @@ function formatSocialLink(link) {
   return String(link ?? "").trim();
 }
 
+function formatExternalLink(link) {
+  if (link && typeof link === "object") {
+    const url = String(link.url ?? "").trim();
+    const text = String(link.text ?? "").trim();
+    return text && text !== url ? `${text}: ${url}` : url;
+  }
+
+  return String(link ?? "").trim();
+}
+
 function formatSection(label, values, formatter = String) {
   const formattedValues = (Array.isArray(values) ? values : [])
     .map(formatter)
@@ -48,7 +58,7 @@ export function formatLeadAsText(lead) {
     "",
     formatSection("Social Links", lead?.socialLinks, formatSocialLink),
     "",
-    formatSection("External Links", lead?.externalLinks)
+    formatSection("External Links", lead?.externalLinks, formatExternalLink)
   ].join("\n");
 }
 
@@ -61,8 +71,9 @@ const PLATFORM_LABELS = {
   snapchat: "Snapchat",
   telegram: "Telegram",
   tiktok: "TikTok",
+  twitter: "Twitter",
   whatsapp: "WhatsApp",
-  x: "X",
+  other: "Other",
   youtube: "YouTube"
 };
 
@@ -227,7 +238,11 @@ function formatExportLead(lead, index) {
       formatExportSocialLink
     ),
     "",
-    formatExportList("External Links", lead?.externalLinks),
+    formatExportList(
+      "External Links",
+      lead?.externalLinks,
+      formatExternalLink
+    ),
     "",
     EXPORT_SEPARATOR,
     "END LEAD",
@@ -493,7 +508,7 @@ export function mapLeadToCsvRow(lead) {
   addNote(
     notes,
     "external links",
-    (lead?.externalLinks ?? []).map(String)
+    (lead?.externalLinks ?? []).map(formatExternalLink)
   );
 
   return {

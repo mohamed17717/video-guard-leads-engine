@@ -359,14 +359,20 @@ test("extracts WhatsApp numbers from button attributes and embedded URLs", () =>
 test("classifies supported social platforms", () => {
   const expectedPlatforms = new Map([
     ["https://facebook.com/example", "facebook"],
+    ["https://m.facebook.com/example", "facebook"],
+    ["https://web.facebook.com/example", "facebook"],
+    ["https://fb.com/example", "facebook"],
     ["https://instagram.com/example", "instagram"],
     ["https://tiktok.com/@example", "tiktok"],
     ["https://youtu.be/example", "youtube"],
     ["https://linkedin.com/company/example", "linkedin"],
-    ["https://twitter.com/example", "x"],
+    ["https://twitter.com/example", "twitter"],
+    ["https://x.com/example", "twitter"],
     ["https://t.me/example", "telegram"],
+    ["https://telegram.me/example", "telegram"],
     ["https://wa.me/201012345678", "whatsapp"],
-    ["https://snapchat.com/add/example", "snapchat"]
+    ["https://snapchat.com/add/example", "snapchat"],
+    ["https://threads.net/@example", "other"]
   ]);
 
   for (const [url, platform] of expectedPlatforms) {
@@ -398,7 +404,79 @@ test("returns unique social and external links and excludes internal or invalid 
     }
   ]);
   assert.deepEqual(extractExternalLinks(documentRoot, sourceUrl), [
-    "https://partner.test/offer"
+    {
+      url: "https://partner.test/offer",
+      text: "",
+      type: "website"
+    }
+  ]);
+});
+
+test("filters social actions and returns external link metadata from a test page", () => {
+  const documentRoot = loadHtmlFixture("link-detection.html");
+  const sourceUrl = "https://example.com/course";
+  const socialLinks = extractSocialLinks(documentRoot, sourceUrl);
+  const externalLinks = extractExternalLinks(documentRoot, sourceUrl);
+
+  assert.deepEqual(
+    socialLinks.map(({ platform }) => platform),
+    [
+      "facebook",
+      "facebook",
+      "instagram",
+      "youtube",
+      "youtube",
+      "tiktok",
+      "linkedin",
+      "twitter",
+      "twitter",
+      "telegram",
+      "telegram",
+      "whatsapp",
+      "snapchat",
+      "other"
+    ]
+  );
+  assert.ok(
+    socialLinks.every(
+      ({ url }) =>
+        !/login|sharer|intent\/tweet|share-offsite|\/share\/url|l\.php|redirect/.test(
+          url
+        )
+    )
+  );
+  assert.deepEqual(externalLinks[0], {
+    url: "https://partner.example/offer?campaign=summer",
+    text: "Summer partner offer",
+    type: "website"
+  });
+  assert.equal(externalLinks.length, 2);
+  assert.equal(externalLinks[1].url, "https://docs.partner.example/start");
+  assert.equal(externalLinks[1].type, "website");
+  assert.equal(externalLinks[1].text.length, 160);
+  assert.ok(externalLinks[1].text.endsWith("…"));
+});
+
+test("excludes a social link when it points to the current page", () => {
+  const currentUrl = "https://instagram.com/example/";
+  const documentRoot = documentFixture({
+    anchors: [
+      element({
+        text: "Current profile",
+        attributes: { href: "https://instagram.com/example#bio" }
+      }),
+      element({
+        text: "Other profile",
+        attributes: { href: "https://instagram.com/another" }
+      })
+    ]
+  });
+
+  assert.deepEqual(extractSocialLinks(documentRoot, currentUrl), [
+    {
+      platform: "instagram",
+      url: "https://instagram.com/another"
+    }
   ]);
 });
 
@@ -434,7 +512,13 @@ test("returns the complete extraction result without saving data", () => {
         url: "https://linkedin.com/company/example"
       }
     ],
-    externalLinks: ["https://partner.test/"]
+    externalLinks: [
+      {
+        url: "https://partner.test/",
+        text: "",
+        type: "website"
+      }
+    ]
   });
 });
 

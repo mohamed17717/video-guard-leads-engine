@@ -25,6 +25,11 @@ Extracted phone records retain a short context snippet and their source
 metadata). The detector rejects common dates, order and product numbers, prices,
 view counts, Facebook IDs, timestamps, and postal codes, and supports
 Arabic-Indic digits.
+Social URLs use consistent platform values, including `twitter` for both
+Twitter and X domains and `other` for recognized secondary social networks.
+Login, OAuth, share-control, tracking-redirect, empty-profile, and current-page
+links are excluded. External links retain normalized URL, shortened anchor text,
+and a `website` type while legacy string links remain compatible.
 
 ## Load the extension in Chrome
 

@@ -49,6 +49,14 @@ function getSocialText(link) {
   return String(link ?? "");
 }
 
+function getExternalLinkText(link) {
+  if (link && typeof link === "object") {
+    return [link.text, link.url, link.type].filter(Boolean).join(" ");
+  }
+
+  return String(link ?? "");
+}
+
 function createSearchText(lead) {
   return [
     lead.pageTitle,
@@ -57,7 +65,7 @@ function createSearchText(lead) {
     ...(lead.whatsapp ?? []).map(getPhoneText),
     ...(lead.emails ?? []),
     ...(lead.socialLinks ?? []).map(getSocialText),
-    ...(lead.externalLinks ?? [])
+    ...(lead.externalLinks ?? []).map(getExternalLinkText)
   ]
     .filter(Boolean)
     .join("\n")
@@ -308,7 +316,12 @@ function renderLeadDetails(container, lead) {
     createDetailSection(
       "External Links",
       lead.externalLinks,
-      (url) => url,
+      (link) =>
+        typeof link === "string"
+          ? link
+          : link.text
+            ? `${link.text}: ${link.url}`
+            : link.url,
       true
     )
   );

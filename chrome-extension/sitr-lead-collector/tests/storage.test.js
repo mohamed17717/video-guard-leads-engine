@@ -92,7 +92,11 @@ test("suppresses stored social URLs from external links", async () => {
   ]);
 
   assert.deepEqual((await getAllLeads())[0].externalLinks, [
-    "https://partner.test"
+    {
+      url: "https://partner.test",
+      text: "",
+      type: "website"
+    }
   ]);
 });
 
@@ -180,8 +184,54 @@ test("merges duplicate values and keeps the oldest capture time", () => {
   ]);
   assert.equal(merged.socialLinks.length, 2);
   assert.deepEqual(merged.externalLinks, [
-    "https://partner.test",
-    "https://another-partner.test/"
+    {
+      url: "https://partner.test",
+      text: "",
+      type: "website"
+    },
+    {
+      url: "https://another-partner.test",
+      text: "",
+      type: "website"
+    }
+  ]);
+});
+
+test("migrates legacy social values and keeps the best external link text", async () => {
+  installStorage([
+    lead({
+      id: "legacy-links",
+      socialLinks: [
+        {
+          platform: "x",
+          url: "https://x.com/example"
+        }
+      ],
+      externalLinks: [
+        "https://partner.test/about",
+        {
+          url: "https://partner.test/about#team",
+          text: "About the partner",
+          type: "website"
+        }
+      ]
+    })
+  ]);
+
+  const storedLead = (await getAllLeads())[0];
+
+  assert.deepEqual(storedLead.socialLinks, [
+    {
+      platform: "twitter",
+      url: "https://x.com/example"
+    }
+  ]);
+  assert.deepEqual(storedLead.externalLinks, [
+    {
+      url: "https://partner.test/about",
+      text: "About the partner",
+      type: "website"
+    }
   ]);
 });
 

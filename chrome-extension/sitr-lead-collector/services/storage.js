@@ -1,6 +1,8 @@
 import {
   normalizeEmail,
+  normalizeExternalLinks,
   normalizePhoneNumber,
+  normalizeSocialLinks,
   normalizeUrl
 } from "./normalizer.js";
 
@@ -27,11 +29,12 @@ function createLeadId() {
 function createLeadRecord(lead, id = createLeadId()) {
   const capturedAt =
     String(lead?.capturedAt ?? "").trim() || new Date().toISOString();
-  const socialLinks = cloneList(lead?.socialLinks);
+  const sourceUrl = String(lead?.sourceUrl ?? "").trim();
+  const socialLinks = normalizeSocialLinks(lead?.socialLinks, sourceUrl);
   const record = {
     id,
     pageTitle: String(lead?.pageTitle ?? "").trim(),
-    sourceUrl: String(lead?.sourceUrl ?? "").trim(),
+    sourceUrl,
     hostname: String(lead?.hostname ?? "").trim(),
     capturedAt,
     phones: cloneList(lead?.phones),
@@ -40,7 +43,7 @@ function createLeadRecord(lead, id = createLeadId()) {
     socialLinks,
     externalLinks: removeSocialUrlsFromExternal(
       socialLinks,
-      lead?.externalLinks
+      normalizeExternalLinks(lead?.externalLinks, sourceUrl)
     )
   };
   const lastUpdatedAt = String(lead?.lastUpdatedAt ?? "").trim();
@@ -124,20 +127,6 @@ function mergePhoneLists(existingValues, incomingValues) {
   return Array.from(uniqueValues.values());
 }
 
-function socialLinkIdentity(value) {
-  if (!value || typeof value !== "object") {
-    return "";
-  }
-
-  const platform = String(value.platform ?? "").trim().toLowerCase();
-  const rawUrl = String(value.url ?? "").trim();
-  const url = /^whatsapp:/i.test(rawUrl)
-    ? rawUrl
-    : normalizeUrl(rawUrl);
-
-  return platform && url ? `${platform}:${url}` : "";
-}
-
 function socialUrlIdentity(value) {
   if (!value || typeof value !== "object") {
     return "";
@@ -148,7 +137,9 @@ function socialUrlIdentity(value) {
 }
 
 function externalLinkIdentity(value) {
-  return normalizeUrl(value) || String(value ?? "").trim();
+  const rawUrl =
+    value && typeof value === "object" ? value.url : value;
+  return normalizeUrl(rawUrl) || String(rawUrl ?? "").trim();
 }
 
 function emailIdentity(value) {
@@ -160,9 +151,27 @@ function removeSocialUrlsFromExternal(socialLinks, externalLinks) {
     cloneList(socialLinks).map(socialUrlIdentity).filter(Boolean)
   );
 
-  return cloneList(externalLinks).filter(
-    (url) => !socialUrls.has(externalLinkIdentity(url))
+  return normalizeExternalLinks(externalLinks).filter(
+    (link) => !socialUrls.has(externalLinkIdentity(link))
   );
+}
+
+function mergeExternalLinks(existingValues, incomingValues) {
+  const uniqueLinks = new Map();
+
+  for (const link of normalizeExternalLinks([
+    ...cloneList(existingValues),
+    ...cloneList(incomingValues)
+  ])) {
+    const identity = externalLinkIdentity(link);
+    const existing = uniqueLinks.get(identity);
+
+    if (!existing || (!existing.text && link.text)) {
+      uniqueLinks.set(identity, link);
+    }
+  }
+
+  return Array.from(uniqueLinks.values());
 }
 
 function mergeUnique(existingValues, incomingValues, getIdentity) {
@@ -200,17 +209,15 @@ export function mergeLeadRecords(
   incomingLead,
   { lastUpdatedAt = new Date().toISOString() } = {}
 ) {
-  const socialLinks = mergeUnique(
-    existingLead?.socialLinks,
-    incomingLead?.socialLinks,
-    socialLinkIdentity
-  );
+  const socialLinks = normalizeSocialLinks([
+    ...cloneList(existingLead?.socialLinks),
+    ...cloneList(incomingLead?.socialLinks)
+  ]);
   const externalLinks = removeSocialUrlsFromExternal(
     socialLinks,
-    mergeUnique(
+    mergeExternalLinks(
       existingLead?.externalLinks,
-      incomingLead?.externalLinks,
-      externalLinkIdentity
+      incomingLead?.externalLinks
     )
   );
 
@@ -259,8 +266,9 @@ export async function getAllLeads() {
   return leads.map((lead) => ({
     ...lead,
     emails: cloneList(lead?.emails),
+    socialLinks: normalizeSocialLinks(lead?.socialLinks, lead?.sourceUrl),
     externalLinks: removeSocialUrlsFromExternal(
-      lead?.socialLinks,
+      normalizeSocialLinks(lead?.socialLinks, lead?.sourceUrl),
       lead?.externalLinks
     )
   }));

@@ -211,7 +211,13 @@ function renderPreview(lead) {
     lead.socialLinks,
     ({ platform, url }) => `${platform}: ${url}`
   );
-  renderLinkList("#preview-external", lead.externalLinks, (url) => url);
+  renderLinkList("#preview-external", lead.externalLinks, (link) => {
+    if (typeof link === "string") {
+      return link;
+    }
+
+    return link.text ? `${link.text}: ${link.url}` : link.url;
+  });
 
   preview.hidden = false;
   updateSaveButton();

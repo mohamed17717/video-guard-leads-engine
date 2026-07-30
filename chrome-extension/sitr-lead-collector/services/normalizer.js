@@ -37,6 +37,19 @@ const TRACKING_PARAMETERS = new Set([
   "wbraid"
 ]);
 
+const SOCIAL_PLATFORM_VALUES = new Set([
+  "facebook",
+  "instagram",
+  "youtube",
+  "tiktok",
+  "linkedin",
+  "twitter",
+  "telegram",
+  "whatsapp",
+  "snapchat",
+  "other"
+]);
+
 const PHONE_SOURCE_PRIORITY = {
   "tel-link": 6,
   "whatsapp-link": 5,
@@ -284,11 +297,21 @@ export function normalizeUrls(values, baseUrl = undefined) {
   return Array.from(uniqueUrls);
 }
 
-function normalizeSocialLinks(values, baseUrl) {
+export function normalizeSocialPlatform(value) {
+  const platform = String(value ?? "").trim().toLowerCase();
+
+  if (platform === "x") {
+    return "twitter";
+  }
+
+  return SOCIAL_PLATFORM_VALUES.has(platform) ? platform : "other";
+}
+
+export function normalizeSocialLinks(values, baseUrl) {
   const uniqueLinks = new Map();
 
   for (const value of values ?? []) {
-    const platform = String(value?.platform ?? "").trim().toLowerCase();
+    const platform = normalizeSocialPlatform(value?.platform);
     const rawUrl = String(value?.url ?? "").trim();
     const normalizedUrl = /^whatsapp:/i.test(rawUrl)
       ? rawUrl
@@ -298,10 +321,47 @@ function normalizeSocialLinks(values, baseUrl) {
       continue;
     }
 
-    const key = `${platform}:${normalizedUrl}`;
+    const existing = uniqueLinks.get(normalizedUrl);
 
-    if (!uniqueLinks.has(key)) {
-      uniqueLinks.set(key, { platform, url: normalizedUrl });
+    if (
+      !existing ||
+      (existing.platform === "other" && platform !== "other")
+    ) {
+      uniqueLinks.set(normalizedUrl, { platform, url: normalizedUrl });
+    }
+  }
+
+  return Array.from(uniqueLinks.values());
+}
+
+function normalizeLinkText(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length <= 160
+    ? text
+    : `${text.slice(0, 159).trimEnd()}…`;
+}
+
+export function normalizeExternalLinks(values, baseUrl = undefined) {
+  const uniqueLinks = new Map();
+
+  for (const value of values ?? []) {
+    const inputIsObject = value && typeof value === "object";
+    const rawUrl = inputIsObject ? value.url : value;
+    const url = normalizeUrl(rawUrl, baseUrl);
+
+    if (!url) {
+      continue;
+    }
+
+    const link = {
+      url,
+      text: inputIsObject ? normalizeLinkText(value.text) : "",
+      type: "website"
+    };
+    const existing = uniqueLinks.get(url);
+
+    if (!existing || (!existing.text && link.text)) {
+      uniqueLinks.set(url, link);
     }
   }
 
@@ -313,8 +373,11 @@ export function normalizeExtractedData(data) {
   const sourceUrl = normalizeUrl(rawSourceUrl) || rawSourceUrl;
   const socialLinks = normalizeSocialLinks(data?.socialLinks, sourceUrl);
   const socialUrls = new Set(socialLinks.map(({ url }) => url));
-  const externalLinks = normalizeUrls(data?.externalLinks, sourceUrl).filter(
-    (url) => !socialUrls.has(url)
+  const externalLinks = normalizeExternalLinks(
+    data?.externalLinks,
+    sourceUrl
+  ).filter(
+    ({ url }) => url !== sourceUrl && !socialUrls.has(url)
   );
   let hostname = String(data?.hostname ?? "").trim();
 

@@ -206,7 +206,13 @@ test("maps lead data to the CSV schema and moves extra data into notes", () => {
         url: "https://facebook.com/example"
       }
     ],
-    externalLinks: ["https://partner.example"]
+    externalLinks: [
+      {
+        url: "https://partner.example",
+        text: "Partner website",
+        type: "website"
+      }
+    ]
   });
 
   assert.equal(row.name, "example.com");
@@ -228,7 +234,10 @@ test("maps lead data to the CSV schema and moves extra data into notes", () => {
   assert.match(row.notes, /other emails: sales@example.com/);
   assert.match(row.notes, /YouTube: https:\/\/youtube.com\/@example/);
   assert.match(row.notes, /Facebook: https:\/\/facebook.com\/example/);
-  assert.match(row.notes, /external links: https:\/\/partner.example/);
+  assert.match(
+    row.notes,
+    /external links: Partner website: https:\/\/partner.example/
+  );
 });
 
 test("uses a WhatsApp social link as WhatsApp without duplicating it in notes", () => {

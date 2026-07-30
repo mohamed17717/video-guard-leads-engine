@@ -5,8 +5,10 @@ import {
   normalizeExtractedData,
   normalizeEmail,
   normalizeEmails,
+  normalizeExternalLinks,
   normalizePhoneNumber,
   normalizePhoneNumbers,
+  normalizeSocialPlatform,
   normalizeUrl,
   normalizeUrls
 } from "../services/normalizer.js";
@@ -167,6 +169,32 @@ test("deduplicates normalized URLs and rejects non-web protocols", () => {
   );
 });
 
+test("normalizes social platform values and external link metadata", () => {
+  assert.equal(normalizeSocialPlatform("x"), "twitter");
+  assert.equal(normalizeSocialPlatform("Twitter"), "twitter");
+  assert.equal(normalizeSocialPlatform("unsupported-network"), "other");
+  assert.deepEqual(
+    normalizeExternalLinks(
+      [
+        {
+          url: "/partner/?utm_source=page",
+          text: "  Partner   website ",
+          type: "unknown"
+        },
+        "https://example.com/partner#duplicate"
+      ],
+      "https://example.com/course"
+    ),
+    [
+      {
+        url: "https://example.com/partner",
+        text: "Partner website",
+        type: "website"
+      }
+    ]
+  );
+});
+
 test("normalizes a complete extracted preview without mutating its shape", () => {
   assert.deepEqual(
     normalizeExtractedData({
@@ -213,7 +241,13 @@ test("normalizes a complete extracted preview without mutating its shape", () =>
           url: "https://instagram.com/example"
         }
       ],
-      externalLinks: ["https://partner.test"]
+      externalLinks: [
+        {
+          url: "https://partner.test",
+          text: "",
+          type: "website"
+        }
+      ]
     }
   );
 });

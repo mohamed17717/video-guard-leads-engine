@@ -61,13 +61,26 @@ const PHONE_ATTRIBUTE_PATTERN =
 const WHATSAPP_WIDGET_SIGNAL_PATTERN =
   /(?:whats[\s_-]*app|joinchat|wa\.me|whatsapp:\/\/)/i;
 
+const LINK_TEXT_MAX_LENGTH = 160;
+
+const LINK_TRACKING_PARAMETERS = new Set([
+  "dclid",
+  "fbclid",
+  "gclid",
+  "gbraid",
+  "mc_cid",
+  "mc_eid",
+  "msclkid",
+  "wbraid"
+]);
+
 const SOCIAL_DOMAINS = [
   { platform: "facebook", domains: ["facebook.com", "fb.com", "fb.me"] },
   { platform: "instagram", domains: ["instagram.com"] },
   { platform: "tiktok", domains: ["tiktok.com"] },
   { platform: "youtube", domains: ["youtube.com", "youtu.be"] },
   { platform: "linkedin", domains: ["linkedin.com"] },
-  { platform: "x", domains: ["x.com", "twitter.com"] },
+  { platform: "twitter", domains: ["x.com", "twitter.com"] },
   {
     platform: "telegram",
     domains: ["t.me", "telegram.me", "telegram.org"]
@@ -77,6 +90,17 @@ const SOCIAL_DOMAINS = [
     domains: ["wa.me", "whatsapp.com"]
   },
   { platform: "snapchat", domains: ["snapchat.com"] }
+];
+
+const OTHER_SOCIAL_DOMAINS = [
+  "behance.net",
+  "discord.com",
+  "discord.gg",
+  "pinterest.com",
+  "reddit.com",
+  "threads.net",
+  "vimeo.com",
+  "vk.com"
 ];
 
 function safeQueryAll(root, selector) {
@@ -675,6 +699,18 @@ function normalizeHttpUrl(url, baseUrl = undefined) {
     }
 
     parsedUrl.hash = "";
+
+    for (const parameterName of Array.from(parsedUrl.searchParams.keys())) {
+      const normalizedName = parameterName.toLowerCase();
+
+      if (
+        normalizedName.startsWith("utm_") ||
+        LINK_TRACKING_PARAMETERS.has(normalizedName)
+      ) {
+        parsedUrl.searchParams.delete(parameterName);
+      }
+    }
+
     return parsedUrl.href;
   } catch {
     return "";
@@ -703,13 +739,229 @@ export function classifySocialUrl(url, baseUrl = undefined) {
     domains.some((domain) => domainMatches(hostname, domain))
   );
 
-  return match?.platform ?? null;
+  if (match) {
+    return match.platform;
+  }
+
+  return OTHER_SOCIAL_DOMAINS.some((domain) =>
+    domainMatches(hostname, domain)
+  )
+    ? "other"
+    : null;
 }
 
-function getAnchorUrls(documentRoot) {
-  return safeQueryAll(documentRoot, "a[href]")
-    .map((anchor) => getAttribute(anchor, "href").trim())
-    .filter(Boolean);
+function cleanAnchorText(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+
+  if (text.length <= LINK_TEXT_MAX_LENGTH) {
+    return text;
+  }
+
+  return `${text.slice(0, LINK_TEXT_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+function isShareControl(element) {
+  const descriptor = [
+    getAttribute(element, "class"),
+    getAttribute(element, "id"),
+    getAttribute(element, "aria-label"),
+    getAttribute(element, "title"),
+    getElementText(element)
+  ].join(" ");
+
+  return /\b(?:share|sharing|social-share|share-button)\b|(?:مشاركة|شارك)/i.test(
+    descriptor
+  );
+}
+
+function comparableHttpUrl(value, baseUrl = undefined) {
+  const normalizedUrl = normalizeHttpUrl(value, baseUrl);
+
+  if (!normalizedUrl) {
+    return "";
+  }
+
+  const parsedUrl = new URL(normalizedUrl);
+  parsedUrl.searchParams.sort();
+  const pathname =
+    parsedUrl.pathname.length > 1
+      ? parsedUrl.pathname.replace(/\/+$/, "")
+      : parsedUrl.pathname;
+
+  return `${parsedUrl.origin}${pathname}${parsedUrl.search}`;
+}
+
+function isCurrentPageLink(url, sourceUrl) {
+  const linkKey = comparableHttpUrl(url, sourceUrl);
+  const sourceKey = comparableHttpUrl(sourceUrl);
+
+  return Boolean(linkKey && sourceKey && linkKey === sourceKey);
+}
+
+function hasWhatsappRecipient(rawUrl, baseUrl = undefined) {
+  try {
+    const parsedUrl = new URL(rawUrl, baseUrl);
+    const queryNumber =
+      parsedUrl.searchParams.get("phone") ??
+      parsedUrl.searchParams.get("number");
+    const pathNumber = domainMatches(
+      parsedUrl.hostname.toLowerCase(),
+      "wa.me"
+    )
+      ? parsedUrl.pathname.split("/").filter(Boolean)[0] ?? ""
+      : "";
+
+    return /\d{8,15}/.test(
+      String(queryNumber || pathNumber).replace(/\D/g, "")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isTrackingRedirectUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+  const pathname = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  const hasRedirectTarget = [
+    "dest",
+    "destination",
+    "q",
+    "redirect",
+    "redirect_url",
+    "target",
+    "u",
+    "url"
+  ].some((name) => url.searchParams.has(name));
+
+  if (
+    ["l.facebook.com", "lm.facebook.com", "l.instagram.com", "t.co"].includes(
+      hostname
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    domainMatches(hostname, "facebook.com") &&
+    ["/l.php", "/flx/warn"].includes(pathname)
+  ) {
+    return true;
+  }
+
+  return (
+    (domainMatches(hostname, "google.com") && pathname === "/url") ||
+    (domainMatches(hostname, "youtube.com") &&
+      pathname === "/redirect") ||
+    (/\/(?:away|out|redirect|track)(?:\/|$)/.test(pathname) &&
+      hasRedirectTarget)
+  );
+}
+
+function isLoginOrOauthUrl(url) {
+  const pathname = url.pathname.toLowerCase();
+  const hostname = url.hostname.toLowerCase();
+
+  return (
+    /\/(?:accounts\/login|login|log-in|signin|sign-in|checkpoint|oauth2?|authorize)(?:\/|$)/i.test(
+      pathname
+    ) ||
+    hostname.startsWith("oauth.") ||
+    (url.searchParams.has("client_id") &&
+      (url.searchParams.has("redirect_uri") ||
+        url.searchParams.has("response_type")))
+  );
+}
+
+function isShareActionUrl(url, platform) {
+  const pathname = url.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+
+  if (
+    platform === "facebook" &&
+    /^\/(?:sharer(?:\/sharer(?:\.php)?)?|sharer\.php|share|share\.php|dialog\/share)(?:\/|$)/.test(
+      pathname
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    platform === "twitter" &&
+    /^\/(?:intent\/tweet|share)(?:\/|$)/.test(pathname)
+  ) {
+    return true;
+  }
+
+  if (
+    platform === "linkedin" &&
+    /^\/(?:sharing\/share-offsite|sharearticle)(?:\/|$)/.test(pathname)
+  ) {
+    return true;
+  }
+
+  return (
+    platform === "telegram" &&
+    /^\/share\/url(?:\/|$)/.test(pathname)
+  );
+}
+
+function isEmptySocialUrl(url, platform) {
+  const pathname = url.pathname.replace(/\/+$/, "") || "/";
+
+  if (pathname === "/") {
+    return true;
+  }
+
+  if (
+    platform === "facebook" &&
+    pathname.toLowerCase() === "/profile.php" &&
+    !url.searchParams.get("id")
+  ) {
+    return true;
+  }
+
+  if (platform === "whatsapp") {
+    const hostname = url.hostname.toLowerCase();
+
+    if (
+      domainMatches(hostname, "wa.me") ||
+      /^\/send(?:\/|$)/i.test(pathname)
+    ) {
+      return !hasWhatsappRecipient(url.href);
+    }
+  }
+
+  return false;
+}
+
+function isExcludedDetectedLink(
+  rawUrl,
+  { baseUrl = undefined, currentUrl = undefined, platform = null } = {}
+) {
+  const value = String(rawUrl ?? "").trim();
+
+  if (!value) {
+    return true;
+  }
+
+  if (/^whatsapp:/i.test(value)) {
+    return !hasWhatsappRecipient(value, baseUrl);
+  }
+
+  const normalizedUrl = normalizeHttpUrl(value, baseUrl);
+
+  if (!normalizedUrl) {
+    return true;
+  }
+
+  const parsedUrl = new URL(normalizedUrl);
+
+  return (
+    isCurrentPageLink(normalizedUrl, currentUrl) ||
+    isTrackingRedirectUrl(parsedUrl) ||
+    isLoginOrOauthUrl(parsedUrl) ||
+    isShareActionUrl(parsedUrl, platform) ||
+    (platform ? isEmptySocialUrl(parsedUrl, platform) : false)
+  );
 }
 
 function normalizeWhatsappUrl(url, baseUrl = undefined) {
@@ -952,7 +1204,15 @@ export function extractWhatsappInfo(documentRoot, baseUrl = undefined) {
   for (const anchor of safeQueryAll(documentRoot, "a[href]")) {
     const href = getAttribute(anchor, "href").trim();
 
-    if (classifySocialUrl(href, baseUrl) !== "whatsapp") {
+    if (
+      isShareControl(anchor) ||
+      classifySocialUrl(href, baseUrl) !== "whatsapp" ||
+      isExcludedDetectedLink(href, {
+        baseUrl,
+        currentUrl: baseUrl,
+        platform: "whatsapp"
+      })
+    ) {
       continue;
     }
 
@@ -988,10 +1248,19 @@ export function extractWhatsappInfo(documentRoot, baseUrl = undefined) {
 export function extractSocialLinks(documentRoot, baseUrl = undefined) {
   const uniqueLinks = new Map();
 
-  for (const href of getAnchorUrls(documentRoot)) {
+  for (const anchor of safeQueryAll(documentRoot, "a[href]")) {
+    const href = getAttribute(anchor, "href").trim();
     const platform = classifySocialUrl(href, baseUrl);
 
-    if (!platform) {
+    if (
+      isShareControl(anchor) ||
+      !platform ||
+      isExcludedDetectedLink(href, {
+        baseUrl,
+        currentUrl: baseUrl,
+        platform
+      })
+    ) {
       continue;
     }
 
@@ -1004,7 +1273,7 @@ export function extractSocialLinks(documentRoot, baseUrl = undefined) {
       continue;
     }
 
-    const key = `${platform}:${normalizedUrl}`;
+    const key = comparableHttpUrl(normalizedUrl) || normalizedUrl;
 
     if (!uniqueLinks.has(key)) {
       uniqueLinks.set(key, { platform, url: normalizedUrl });
@@ -1019,11 +1288,14 @@ export function extractExternalLinks(documentRoot, sourceUrl) {
   const sourceHostname = normalizedSourceUrl
     ? new URL(normalizedSourceUrl).hostname.toLowerCase()
     : "";
-  const uniqueLinks = new Set();
+  const uniqueLinks = new Map();
 
-  for (const href of getAnchorUrls(documentRoot)) {
+  for (const anchor of safeQueryAll(documentRoot, "a[href]")) {
+    const href = getAttribute(anchor, "href").trim();
+
     if (
       !href ||
+      isShareControl(anchor) ||
       href.startsWith("#") ||
       /^(?:javascript|mailto|tel):/i.test(href)
     ) {
@@ -1034,9 +1306,18 @@ export function extractExternalLinks(documentRoot, sourceUrl) {
       continue;
     }
 
+    if (
+      isExcludedDetectedLink(href, {
+        baseUrl: normalizedSourceUrl,
+        currentUrl: normalizedSourceUrl
+      })
+    ) {
+      continue;
+    }
+
     const normalizedUrl = normalizeHttpUrl(href, normalizedSourceUrl);
 
-    if (!normalizedUrl || normalizedUrl === normalizedSourceUrl) {
+    if (!normalizedUrl) {
       continue;
     }
 
@@ -1047,10 +1328,20 @@ export function extractExternalLinks(documentRoot, sourceUrl) {
       continue;
     }
 
-    uniqueLinks.add(normalizedUrl);
+    const key = comparableHttpUrl(normalizedUrl);
+    const link = {
+      url: normalizedUrl,
+      text: cleanAnchorText(getElementText(anchor)),
+      type: "website"
+    };
+    const existing = uniqueLinks.get(key);
+
+    if (!existing || (!existing.text && link.text)) {
+      uniqueLinks.set(key, link);
+    }
   }
 
-  return Array.from(uniqueLinks);
+  return Array.from(uniqueLinks.values());
 }
 
 function toIsoTimestamp(value) {
