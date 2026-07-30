@@ -20,6 +20,11 @@ WhatsApp numbers are also detected from embedded widget configuration such as
 JoinChat `data-settings` JSON and button data attributes.
 Email addresses are collected from visible content, `mailto:` links, metadata,
 contact controls, `data-email` attributes, and common obfuscated formats.
+Extracted phone records retain a short context snippet and their source
+(`tel-link`, `whatsapp-link`, visible text, anchor text, button text, or
+metadata). The detector rejects common dates, order and product numbers, prices,
+view counts, Facebook IDs, timestamps, and postal codes, and supports
+Arabic-Indic digits.
 
 ## Load the extension in Chrome
 
