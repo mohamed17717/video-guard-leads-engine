@@ -25,6 +25,81 @@
         Capture This Page
       </button>
 
+      <section id="lead-preview" class="preview" aria-labelledby="preview-title" hidden>
+        <div class="preview__header">
+          <div>
+            <p class="eyebrow">Review before saving</p>
+            <h2 id="preview-title">Captured lead</h2>
+          </div>
+        </div>
+
+        <dl class="preview__summary">
+          <div>
+            <dt>Page</dt>
+            <dd id="preview-page">—</dd>
+          </div>
+          <div>
+            <dt>Phone Numbers</dt>
+            <dd id="preview-phone-count">0</dd>
+          </div>
+          <div>
+            <dt>WhatsApp</dt>
+            <dd id="preview-whatsapp-count">0</dd>
+          </div>
+          <div>
+            <dt>Social Links</dt>
+            <dd id="preview-social-count">0</dd>
+          </div>
+          <div>
+            <dt>External Links</dt>
+            <dd id="preview-external-count">0</dd>
+          </div>
+        </dl>
+
+        <div class="preview__sections">
+          <details>
+            <summary>
+              Phone Numbers
+              <span id="phone-section-count" class="count-badge">0</span>
+            </summary>
+            <ul id="preview-phones" class="value-list"></ul>
+          </details>
+
+          <details>
+            <summary>
+              WhatsApp
+              <span id="whatsapp-section-count" class="count-badge">0</span>
+            </summary>
+            <ul id="preview-whatsapp" class="value-list"></ul>
+          </details>
+
+          <details>
+            <summary>
+              Social Links
+              <span id="social-section-count" class="count-badge">0</span>
+            </summary>
+            <ul id="preview-social" class="value-list"></ul>
+          </details>
+
+          <details>
+            <summary>
+              External Links
+              <span id="external-section-count" class="count-badge">0</span>
+            </summary>
+            <ul id="preview-external" class="value-list"></ul>
+          </details>
+        </div>
+
+        <div class="preview__actions">
+          <button id="save-lead" class="button button--primary" type="button">
+            Save Lead
+          </button>
+          <button id="cancel-preview" class="button button--secondary" type="button">
+            Cancel
+          </button>
+        </div>
+      </section>
+
       <button id="view-leads" class="button button--secondary" type="button">
         View Collected Leads
       </button>

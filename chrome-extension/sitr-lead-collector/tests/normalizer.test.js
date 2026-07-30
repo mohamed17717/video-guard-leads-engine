@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  normalizeExtractedData,
   normalizePhoneNumber,
   normalizePhoneNumbers,
   normalizeUrl,
@@ -108,5 +109,53 @@ test("deduplicates normalized URLs and rejects non-web protocols", () => {
       "https://example.com"
     ),
     ["https://example.com/about"]
+  );
+});
+
+test("normalizes a complete extracted preview without mutating its shape", () => {
+  assert.deepEqual(
+    normalizeExtractedData({
+      pageTitle: " Example Academy ",
+      sourceUrl: "https://example.com/course/#overview",
+      hostname: "example.com",
+      capturedAt: "2026-07-30T12:00:00.000Z",
+      phones: ["010 1234 5678", "+201012345678"],
+      whatsapp: ["00201012345678"],
+      socialLinks: [
+        {
+          platform: "instagram",
+          url: "https://instagram.com/example/?utm_source=site#bio"
+        }
+      ],
+      externalLinks: [
+        "https://partner.test/?fbclid=abc",
+        "https://partner.test"
+      ]
+    }),
+    {
+      pageTitle: "Example Academy",
+      sourceUrl: "https://example.com/course",
+      hostname: "example.com",
+      capturedAt: "2026-07-30T12:00:00.000Z",
+      phones: [
+        {
+          raw: "010 1234 5678",
+          normalized: "+201012345678"
+        }
+      ],
+      whatsapp: [
+        {
+          raw: "00201012345678",
+          normalized: "+201012345678"
+        }
+      ],
+      socialLinks: [
+        {
+          platform: "instagram",
+          url: "https://instagram.com/example"
+        }
+      ],
+      externalLinks: ["https://partner.test"]
+    }
   );
 });

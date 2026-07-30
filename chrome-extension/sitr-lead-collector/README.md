@@ -8,10 +8,10 @@ presses **Capture This Page**. Page extraction is not run automatically.
 
 ## Current status
 
-This version contains the project structure, popup interface, tested page
-extraction utilities, and tested phone and URL normalization. Connecting
-extraction to the popup, lead viewing, export, storage, and clearing behavior
-remain placeholders for later tasks.
+This version contains the project structure, tested page extraction and
+normalization utilities, and a review-first capture preview in the popup.
+Persistent saving, lead viewing, export, storage, and clearing behavior remain
+placeholders for later tasks.
 
 ## Load the extension in Chrome
 

@@ -174,3 +174,50 @@ export function normalizeUrls(values, baseUrl = undefined) {
 
   return Array.from(uniqueUrls);
 }
+
+function normalizeSocialLinks(values, baseUrl) {
+  const uniqueLinks = new Map();
+
+  for (const value of values ?? []) {
+    const platform = String(value?.platform ?? "").trim().toLowerCase();
+    const rawUrl = String(value?.url ?? "").trim();
+    const normalizedUrl = /^whatsapp:/i.test(rawUrl)
+      ? rawUrl
+      : normalizeUrl(rawUrl, baseUrl);
+
+    if (!platform || !normalizedUrl) {
+      continue;
+    }
+
+    const key = `${platform}:${normalizedUrl}`;
+
+    if (!uniqueLinks.has(key)) {
+      uniqueLinks.set(key, { platform, url: normalizedUrl });
+    }
+  }
+
+  return Array.from(uniqueLinks.values());
+}
+
+export function normalizeExtractedData(data) {
+  const rawSourceUrl = String(data?.sourceUrl ?? "").trim();
+  const sourceUrl = normalizeUrl(rawSourceUrl) || rawSourceUrl;
+  let hostname = String(data?.hostname ?? "").trim();
+
+  try {
+    hostname = new URL(sourceUrl).hostname;
+  } catch {
+    // Retain the extracted hostname when the source URL is unusual.
+  }
+
+  return {
+    pageTitle: String(data?.pageTitle ?? "").trim(),
+    sourceUrl,
+    hostname,
+    capturedAt: String(data?.capturedAt ?? ""),
+    phones: normalizePhoneNumbers(data?.phones),
+    whatsapp: normalizePhoneNumbers(data?.whatsapp),
+    socialLinks: normalizeSocialLinks(data?.socialLinks, sourceUrl),
+    externalLinks: normalizeUrls(data?.externalLinks, sourceUrl)
+  };
+}
