@@ -11,24 +11,43 @@
   box-sizing: border-box;
 }
 
+html,
 body {
-  width: 410px;
-  max-width: 100vw;
+  width: 400px;
+  min-width: 400px;
+  max-width: 400px;
+}
+
+body {
   margin: 0;
+  overflow-x: hidden;
   background: #f7f8fb;
 }
 
 button {
+  min-width: 0;
   font: inherit;
+  overflow-wrap: anywhere;
 }
 
 .popup {
   display: grid;
+  width: 100%;
+  min-width: 0;
   gap: 10px;
   max-height: 620px;
   padding: 16px;
+  overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
+}
+
+.popup > *,
+.preview > *,
+.preview__sections,
+.preview__sections details,
+.quick-copy,
+.manual-contact {
+  min-width: 0;
 }
 
 .popup__header {
@@ -142,7 +161,7 @@ h2 {
 
 .button-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -295,7 +314,7 @@ h2 {
 
 .preview__actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -316,7 +335,7 @@ h2 {
 
 .quick-copy__actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -411,7 +430,7 @@ h2 {
 
 .duplicate-warning__actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -448,7 +467,7 @@ h2 {
 
 .export-dialog__actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -464,20 +483,6 @@ h2 {
 
   .button--danger:not(:disabled):hover {
     background: #ffe9e7;
-  }
-}
-
-@media (max-width: 400px) {
-  body {
-    width: 100vw;
-  }
-
-  .popup {
-    padding: 14px;
-  }
-
-  .manual-contact__control {
-    grid-template-columns: 1fr;
   }
 }
 
